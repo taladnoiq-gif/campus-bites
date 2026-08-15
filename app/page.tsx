@@ -814,8 +814,9 @@ export default function CampusBitesApp() {
 
       let assignedShopId: string | undefined = undefined;
 
+      // 🟢 1 ร้าน = 1 แอคเคาท์ (ล็อก ID ร้านค้าให้ตรงกับไอดีผู้ใช้เสมอ)
       if (authRole === 'MERCHANT') {
-        assignedShopId = `shop-${Date.now()}`;
+        assignedShopId = `shop-${cleanUsername}`;
       }
 
       const newUser: UserProfile = {
@@ -846,6 +847,10 @@ export default function CampusBitesApp() {
         localStorage.setItem('talatnoi_current_user', JSON.stringify(found));
         initProfileEditState(found);
         if (found.role === 'MERCHANT') {
+          // หากยังไม่มี merchantShopId ให้กำหนดค่าเริ่มต้นให้ทันที
+          if (!found.merchantShopId) {
+            found.merchantShopId = `shop-${found.username}`;
+          }
           const myShop = shops.find(s => s.id === found.merchantShopId);
           if (myShop) {
             setEditShopName(myShop.name);
@@ -1112,26 +1117,31 @@ export default function CampusBitesApp() {
     await sendToGoogleSheet('Reviews', [newRev.id, selectedShop.name, newRev.userName, newRev.rating, newRev.comment, newRev.createdAt]);
   };
 
+  // 🟢 บันทึก/อัปเดตข้อมูลร้านค้าเดิม (อ้างอิง shopId คงที่ ป้องกันการสร้างร้านใหม่ซ้ำซ้อน)
   const handleUpdateShopInfo = async (shopId: string) => {
     if (!editShopName.trim()) {
       alert('กรุณาระบุชื่อร้านค้า');
       return;
     }
 
-    const existingShopIndex = shops.findIndex(s => s.id === shopId);
+    // ค้นหาร้านเดิมที่มี id ตรงกัน (หรือชื่อซ้ำกัน) เพื่อรวมเป็นร้านเดียว
+    const existingShopIndex = shops.findIndex(s => s.id === shopId || s.name.trim() === editShopName.trim());
     let updatedShops = [...shops];
 
     if (existingShopIndex >= 0) {
+      // อัปเดตร้านเดิมที่มีอยู่แล้ว
       updatedShops[existingShopIndex] = {
         ...updatedShops[existingShopIndex],
-        name: editShopName,
+        id: shopId, // ล็อก ID ให้ตรงกับ merchantShopId ของแอคเคาท์
+        name: editShopName.trim(),
         canteenZone: editShopZone || 'โซนกลาง',
         bannerImage: editShopBanner || updatedShops[existingShopIndex].bannerImage
       };
     } else {
+      // สร้างร้านใหม่เฉพาะกรณีที่ยังไม่มีจริงๆ
       const newShopObj: Shop = {
         id: shopId,
-        name: editShopName,
+        name: editShopName.trim(),
         category: 'อาหารตามสั่ง',
         rating: 5.0,
         reviewCount: 0,
@@ -1142,6 +1152,9 @@ export default function CampusBitesApp() {
       };
       updatedShops = [newShopObj, ...shops];
     }
+
+    // กรองร้านค้าที่ชื่อว่างออก เพื่อไม่ให้เกิดร้านผี
+    updatedShops = updatedShops.filter(s => s.name.trim().length > 0);
 
     saveShopsToStorage(updatedShops);
     const current = updatedShops.find(s => s.id === shopId);
@@ -1215,7 +1228,7 @@ export default function CampusBitesApp() {
     alert('อัปเดตเมนูอาหารเรียบร้อยแล้ว!');
   };
 
-  // 🟢 แก้ไขฟังก์ชันเพิ่มเมนูใหม่ให้บันทึกเข้าไปในร้านปัจจุบัน (1 ร้านมีหลายเมนู)
+  // 🟢 ฟังก์ชันเพิ่มเมนูใหม่ (ตรวจสอบและอัปเดตร้านเดิมที่มีอยู่แล้วทันที ไม่สร้างร้านซ้ำ)
   const handleAddNewMenu = async (shopId: string) => {
     if (!newMenuName.trim() || !newMenuPrice) {
       alert('กรุณาระบุชื่อเมนูและราคาเริ่มต้น');
@@ -1236,16 +1249,34 @@ export default function CampusBitesApp() {
       addons: [...tempAddons]
     };
 
+    let shopFound = false;
     const updatedShops = shops.map(s => {
-      if (s.id === shopId) {
+      if (s.id === shopId || (currentUser?.merchantShopId && s.id === currentUser.merchantShopId)) {
+        shopFound = true;
         return { ...s, menus: [...s.menus, newMenuItem] };
       }
       return s;
     });
+
+    // หากยังไม่มีร้านใน State ให้สร้างขึ้นผูกกับ shopId ปัจจุบัน
+    if (!shopFound) {
+      const newShopObj: Shop = {
+        id: shopId,
+        name: editShopName || currentUser?.name || 'ร้านค้าของฉัน',
+        category: 'อาหารตามสั่ง',
+        rating: 5.0,
+        reviewCount: 0,
+        bannerImage: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
+        isOpen: true,
+        canteenZone: editShopZone || 'โซนกลาง',
+        menus: [newMenuItem]
+      };
+      updatedShops.push(newShopObj);
+    }
     
     saveShopsToStorage(updatedShops);
 
-    const currentShop = updatedShops.find(s => s.id === shopId);
+    const currentShop = updatedShops.find(s => s.id === shopId || s.id === currentUser?.merchantShopId);
     if (currentShop) {
       await sendToGoogleSheet('Shops', [
         currentShop.id, 
@@ -1821,7 +1852,11 @@ export default function CampusBitesApp() {
   }
 
   if (currentUser.role === 'MERCHANT') {
-    const myShop = shops.find(s => s.id === currentUser.merchantShopId);
+    // 🟢 กำหนด merchantShopId ให้ผูกกับ username ของบัญชีนั้นๆ เสมอ เพื่อความเสถียร 1:1
+    if (!currentUser.merchantShopId) {
+      currentUser.merchantShopId = `shop-${currentUser.username}`;
+    }
+    const myShop = shops.find(s => s.id === currentUser.merchantShopId || s.name.trim().toLowerCase() === editShopName.trim().toLowerCase());
     const myOrders = myShop ? ordersQueue.filter(o => o.shopId === myShop.id) : [];
 
     const myDailyRevenue = myOrders
@@ -1921,14 +1956,7 @@ export default function CampusBitesApp() {
                   </div>
 
                   <button 
-                    onClick={() => {
-                      const newShopId = currentUser.merchantShopId || `shop-${Date.now()}`;
-                      const updatedUser = { ...currentUser, merchantShopId: newShopId };
-                      setCurrentUser(updatedUser);
-                      localStorage.setItem('talatnoi_current_user', JSON.stringify(updatedUser));
-                      saveUsersToStorage(registeredUsers.map(u => u.id === currentUser.id ? updatedUser : u));
-                      handleUpdateShopInfo(newShopId);
-                    }} 
+                    onClick={() => handleUpdateShopInfo(currentUser.merchantShopId || `shop-${currentUser.username}`)} 
                     className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-2xl font-black text-xs shadow-md transition-colors cursor-pointer mt-2"
                   >
                     บันทึกข้อมูลและเริ่มเปิดร้านค้า ➔
