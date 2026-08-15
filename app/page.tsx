@@ -521,7 +521,6 @@ export default function CampusBitesApp() {
   const [newAddonName, setNewAddonName] = useState('');
   const [newAddonPrice, setNewAddonPrice] = useState('');
 
-  // 🟢 State สำหรับแก้ไขเมนูอาหาร
   const [editingMenu, setEditingMenu] = useState<MenuItem | null>(null);
   const [editMenuName, setEditMenuName] = useState('');
   const [editMenuDesc, setEditMenuDesc] = useState('');
@@ -874,7 +873,6 @@ export default function CampusBitesApp() {
     setEditProfileAvatar(user.avatarUrl || '');
   };
 
-  // 🟢 บันทึกโปรไฟล์ที่แก้ไข พร้อมอัปเดตรูปลง Google Sheets
   const handleSaveProfile = async () => {
     if (!currentUser) return;
     setIsGlobalLoading(true);
@@ -1161,7 +1159,6 @@ export default function CampusBitesApp() {
     alert('แอดมินอัปเดตข้อมูลร้านค้าเรียบร้อยแล้ว!');
   };
 
-  // 🟢 ลบเมนูอาหารของร้านค้า
   const handleAdminDeleteMenu = (shopId: string, menuId: string) => {
     if (confirm('คุณต้องการลบเมนูนี้ออกจากร้านค้าหรือไม่?')) {
       const updatedShops = shops.map(s => {
@@ -1179,7 +1176,6 @@ export default function CampusBitesApp() {
     }
   };
 
-  // 🟢 เปิด Modal แก้ไขเมนูอาหาร
   const openEditMenuModal = (menu: MenuItem) => {
     setEditingMenu(menu);
     setEditMenuName(menu.name);
@@ -1188,7 +1184,6 @@ export default function CampusBitesApp() {
     setEditMenuImage(menu.imageUrl);
   };
 
-  // 🟢 บันทึกการแก้ไขเมนูอาหาร
   const handleSaveEditedMenu = async (shopId: string) => {
     if (!editingMenu || !editMenuName.trim() || !editMenuPrice) return;
     const priceNum = parseFloat(editMenuPrice);
@@ -1220,6 +1215,7 @@ export default function CampusBitesApp() {
     alert('อัปเดตเมนูอาหารเรียบร้อยแล้ว!');
   };
 
+  // 🟢 แก้ไขฟังก์ชันเพิ่มเมนูใหม่ให้บันทึกเข้าไปในร้านปัจจุบัน (1 ร้านมีหลายเมนู)
   const handleAddNewMenu = async (shopId: string) => {
     if (!newMenuName.trim() || !newMenuPrice) {
       alert('กรุณาระบุชื่อเมนูและราคาเริ่มต้น');
@@ -1246,11 +1242,22 @@ export default function CampusBitesApp() {
       }
       return s;
     });
+    
     saveShopsToStorage(updatedShops);
 
     const currentShop = updatedShops.find(s => s.id === shopId);
     if (currentShop) {
-      await sendToGoogleSheet('Shops', [currentShop.id, currentShop.name, currentShop.category, currentShop.rating, currentShop.reviewCount, currentShop.bannerImage, currentShop.isOpen, currentShop.canteenZone, JSON.stringify(currentShop.menus)]);
+      await sendToGoogleSheet('Shops', [
+        currentShop.id, 
+        currentShop.name, 
+        currentShop.category, 
+        currentShop.rating, 
+        currentShop.reviewCount, 
+        currentShop.bannerImage, 
+        currentShop.isOpen, 
+        currentShop.canteenZone, 
+        JSON.stringify(currentShop.menus)
+      ]);
     }
 
     setNewMenuName('');
@@ -1260,7 +1267,7 @@ export default function CampusBitesApp() {
     setTempAddons([]);
     setNewAddonName('');
     setNewAddonPrice('');
-    alert(`เพิ่มเมนู "${newMenuItem.name}" เรียบร้อยแล้ว!`);
+    alert(`เพิ่มเมนู "${newMenuItem.name}" ลงในร้านเรียบร้อยแล้ว!`);
   };
 
   const handleExportCsvReport = () => {
@@ -1924,7 +1931,7 @@ export default function CampusBitesApp() {
                     }} 
                     className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-2xl font-black text-xs shadow-md transition-colors cursor-pointer mt-2"
                   >
-                    บันทึกข้อมูลและเปิดร้านค้า ➔
+                    บันทึกข้อมูลและเริ่มเปิดร้านค้า ➔
                   </button>
                 </div>
               </div>
@@ -2108,7 +2115,6 @@ export default function CampusBitesApp() {
                   </div>
                 </div>
 
-                {/* 🟢 รายการเมนู พร้อมปุ่มแก้ไข (Edit) และปุ่มลบ (Delete) */}
                 <div className="space-y-2.5">
                   <h4 className="font-extrabold text-xs text-red-700 uppercase tracking-wider">{t.menuList} ({myShop.menus.length})</h4>
                   {myShop.menus.map(m => (
@@ -2637,7 +2643,6 @@ export default function CampusBitesApp() {
           </div>
         )}
 
-        {/* 🟢 Modal สำหรับแก้ไขเมนูอาหาร */}
         {editingMenu && (
           <div className="fixed inset-0 z-[999] bg-red-950/80 backdrop-blur-md flex justify-center items-center p-4 animate-in fade-in">
             <div className="w-full max-w-sm bg-white border-2 border-red-600 rounded-3xl p-5 space-y-4 text-red-950 shadow-2xl">
