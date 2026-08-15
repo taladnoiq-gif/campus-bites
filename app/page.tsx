@@ -573,7 +573,6 @@ export default function CampusBitesApp() {
         }
 
         if (cloudData.shops && Array.isArray(cloudData.shops)) {
-          // รวมร้านค้าที่มี ID หรือชื่อเดียวกันให้เป็นร้านเดียว (ป้องกันการเกิดร้านซ้ำซ้อน)
           const shopMap = new Map<string, Shop>();
           cloudData.shops.forEach((row: any[]) => {
             const id = String(row[0] || '');
@@ -584,7 +583,6 @@ export default function CampusBitesApp() {
             const parsedMenus = row[8] ? (typeof row[8] === 'string' ? JSON.parse(row[8]) : row[8]) : [];
 
             if (existing) {
-              // รวมเมนูเข้าด้วยกันแบบไม่ซ้ำ ID
               const menuMap = new Map<string, MenuItem>();
               [...existing.menus, ...parsedMenus].forEach(m => menuMap.set(m.id, m));
               existing.menus = Array.from(menuMap.values());
@@ -1127,7 +1125,7 @@ export default function CampusBitesApp() {
     await sendToGoogleSheet('Reviews', [newRev.id, selectedShop.name, newRev.userName, newRev.rating, newRev.comment, newRev.createdAt]);
   };
 
-  // 🟢 บันทึก/ตั้งค่าข้อมูลร้านค้า (บังคับใช้ shopId เดียวกันเป๊ะ ไม่สร้างซ้ำ)
+  // 🟢 บันทึก/ตั้งค่าข้อมูลร้านค้า 1 ร้าน = 1 ID ตายตัว
   const handleUpdateShopInfo = async (shopId: string) => {
     if (!editShopName.trim()) {
       alert('กรุณาระบุชื่อร้านค้า');
@@ -1160,19 +1158,25 @@ export default function CampusBitesApp() {
       updatedShops = [newShopObj, ...updatedShops];
     }
 
-    // กรองร้านค้าที่ซ้ำกันหรือชื่อว่างออก
-    const uniqueShopsMap = new Map<string, Shop>();
+    // กรองและรวมร้านค้าที่มี ID เดียวกันให้เป็นร้านเดียวเสมอ
+    const uniqueMap = new Map<string, Shop>();
     updatedShops.forEach(s => {
-      if (s.name.trim().length > 0) {
-        if (s.id === cleanShopId) {
-          uniqueShopsMap.set(cleanShopId, s);
-        } else if (!uniqueShopsMap.has(s.id)) {
-          uniqueShopsMap.set(s.id, s);
+      if (s.id === cleanShopId) {
+        if (!uniqueMap.has(cleanShopId)) {
+          uniqueMap.set(cleanShopId, s);
+        } else {
+          // รวมเมนูเข้าด้วยกัน
+          const existing = uniqueMap.get(cleanShopId)!;
+          const menuMap = new Map<string, MenuItem>();
+          [...existing.menus, ...s.menus].forEach(m => menuMap.set(m.id, m));
+          existing.menus = Array.from(menuMap.values());
         }
+      } else if (!uniqueMap.has(s.id)) {
+        uniqueMap.set(s.id, s);
       }
     });
 
-    const finalShops = Array.from(uniqueShopsMap.values());
+    const finalShops = Array.from(uniqueMap.values());
     saveShopsToStorage(finalShops);
 
     const current = finalShops.find(s => s.id === cleanShopId);
@@ -1220,8 +1224,10 @@ export default function CampusBitesApp() {
     const priceNum = parseFloat(editMenuPrice);
     if (isNaN(priceNum)) return;
 
+    const cleanShopId = currentUser?.merchantShopId || shopId;
+
     const updatedShops = shops.map(s => {
-      if (s.id === shopId) {
+      if (s.id === cleanShopId) {
         return {
           ...s,
           menus: s.menus.map(m => m.id === editingMenu.id ? {
@@ -1237,7 +1243,7 @@ export default function CampusBitesApp() {
     });
 
     saveShopsToStorage(updatedShops);
-    const currentShop = updatedShops.find(s => s.id === shopId);
+    const currentShop = updatedShops.find(s => s.id === cleanShopId);
     if (currentShop) {
       await sendToGoogleSheet('Shops', [currentShop.id, currentShop.name, currentShop.category, currentShop.rating, currentShop.reviewCount, currentShop.bannerImage, currentShop.isOpen, currentShop.canteenZone, JSON.stringify(currentShop.menus)]);
     }
@@ -1246,7 +1252,7 @@ export default function CampusBitesApp() {
     alert('อัปเดตเมนูอาหารเรียบร้อยแล้ว!');
   };
 
-  // 🟢 ฟังก์ชันเพิ่มเมนูใหม่ (เพิ่มเข้าสู่ร้านค้าปัจจุบันทันทีโดยอิงจาก shopId ของบัญชี)
+  // 🟢 เพิ่มเมนูเข้าสู่ร้านปัจจุบันโดยอิงจาก cleanShopId (1 ร้านมีหลายเมนู ไม่สร้างร้านใหม่)
   const handleAddNewMenu = async (shopId: string) => {
     if (!newMenuName.trim() || !newMenuPrice) {
       alert('กรุณาระบุชื่อเมนูและราคาเริ่มต้น');
@@ -1371,6 +1377,7 @@ export default function CampusBitesApp() {
   const currentDate = new Date().toISOString().split('T')[0];
   const currentMonth = currentDate.substring(0, 7);
 
+  // 🟢 คำนวณรายได้รายวันและรายเดือนให้สอดคล้องกัน (รายเดือนรวมยอดจากออเดอร์สำเร็จ)
   const globalDailyRevenue = ordersQueue
     .filter(o => o.status === 'COMPLETED' && o.createdAt === currentDate)
     .reduce((sum, o) => sum + o.totalAmount, 0);
