@@ -37,7 +37,7 @@ const translations = {
     searchPlaceholder: "ค้นหาเมนูเด็ด, ร้านอาหาร...",
     allShops: "ร้านอาหารแนะนำในโรงอาหาร",
     orderFood: "สั่งเลย",
-    menuList: "เมนูอาหารทั้งหมด",
+    menuList: "เมนูอาหารทั้งหมดในร้าน",
     reviewTitle: "รีวิวความอร่อย",
     submitReview: "ส่งรีวิว",
     takeaway: "ห่อกลับบ้าน 🛍️",
@@ -535,6 +535,9 @@ export default function CampusBitesApp() {
       const savedTab = localStorage.getItem('talatnoi_active_tab');
       if (savedUser) {
         const userObj: UserProfile = JSON.parse(savedUser);
+        if (!userObj.merchantShopId) {
+          userObj.merchantShopId = `shop-${userObj.username}`;
+        }
         setCurrentUser(userObj);
         initProfileEditState(userObj);
         if (savedTab) setActiveTab(savedTab as any);
@@ -559,7 +562,7 @@ export default function CampusBitesApp() {
             username: String(row[2] || '').toLowerCase().trim(),
             role: (String(row[3] || 'STUDENT')) as UserRole,
             phone: String(row[4] || ''),
-            merchantShopId: row[5] && row[5] !== '-' ? String(row[5]) : undefined,
+            merchantShopId: row[5] && row[5] !== '-' ? String(row[5]) : `shop-${String(row[2] || '').toLowerCase().trim()}`,
             avatarUrl: String(row[6] || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80'),
             bio: String(row[7] || 'สมาชิกตลาดน้อยคิว')
           })).filter(u => u.username.length > 0);
@@ -570,20 +573,37 @@ export default function CampusBitesApp() {
         }
 
         if (cloudData.shops && Array.isArray(cloudData.shops)) {
-          const formattedShops: Shop[] = cloudData.shops.map((row: any[]) => ({
-            id: String(row[0] || ''),
-            name: String(row[1] || ''),
-            category: String(row[2] || 'อาหารตามสั่ง'),
-            rating: Number(row[3] || 5.0),
-            reviewCount: Number(row[4] || 0),
-            bannerImage: String(row[5] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80'),
-            isOpen: row[6] !== false && String(row[6]).toUpperCase() !== 'FALSE',
-            canteenZone: String(row[7] || 'โซนกลาง'),
-            menus: row[8] ? (typeof row[8] === 'string' ? JSON.parse(row[8]) : row[8]) : []
-          })).filter(s => s.id.length > 0 && s.name.trim().length > 0);
+          // รวมร้านค้าที่มี ID หรือชื่อเดียวกันให้เป็นร้านเดียว (ป้องกันการเกิดร้านซ้ำซ้อน)
+          const shopMap = new Map<string, Shop>();
+          cloudData.shops.forEach((row: any[]) => {
+            const id = String(row[0] || '');
+            const name = String(row[1] || '').trim();
+            if (!id || !name) return;
 
-          setShops(formattedShops);
-          localStorage.setItem('talatnoi_q_shops', JSON.stringify(formattedShops));
+            const existing = shopMap.get(id);
+            const parsedMenus = row[8] ? (typeof row[8] === 'string' ? JSON.parse(row[8]) : row[8]) : [];
+
+            if (existing) {
+              // รวมเมนูเข้าด้วยกันแบบไม่ซ้ำ ID
+              const menuMap = new Map<string, MenuItem>();
+              [...existing.menus, ...parsedMenus].forEach(m => menuMap.set(m.id, m));
+              existing.menus = Array.from(menuMap.values());
+            } else {
+              shopMap.set(id, {
+                id,
+                name,
+                category: String(row[2] || 'อาหารตามสั่ง'),
+                rating: Number(row[3] || 5.0),
+                reviewCount: Number(row[4] || 0),
+                bannerImage: String(row[5] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80'),
+                isOpen: row[6] !== false && String(row[6]).toUpperCase() !== 'FALSE',
+                canteenZone: String(row[7] || 'โซนกลาง'),
+                menus: parsedMenus
+              });
+            }
+          });
+
+          setShops(Array.from(shopMap.values()));
         }
 
         if (cloudData.orders && Array.isArray(cloudData.orders)) {
@@ -607,7 +627,6 @@ export default function CampusBitesApp() {
 
           setOrdersQueue(formattedOrders);
           setOrderHistory(formattedOrders);
-          localStorage.setItem('talatnoi_q_orders', JSON.stringify(formattedOrders));
 
           if (currentUser?.role === 'MERCHANT' && currentUser.merchantShopId) {
             const myLatestPending = formattedOrders.find(
@@ -643,13 +662,6 @@ export default function CampusBitesApp() {
   const changeTab = (tab: typeof activeTab) => {
     setActiveTab(tab);
     localStorage.setItem('talatnoi_active_tab', tab);
-  };
-
-  const saveOrdersToStorage = (updatedOrders: Order[]) => {
-    setOrdersQueue(updatedOrders);
-    try {
-      localStorage.setItem('talatnoi_q_orders', JSON.stringify(updatedOrders));
-    } catch (e) {}
   };
 
   const saveShopsToStorage = (updatedShops: Shop[]) => {
@@ -742,7 +754,7 @@ export default function CampusBitesApp() {
     if (confirm('🚨 คำเตือนระดับสูงสุด: คุณต้องการรีเซ็ตระบบทั้งหมด ล้างยอดขายรายวัน/รายเดือน ลบคำสั่งซื้อทั้งหมด และลบผู้ใช้งานทั้งหมดออก (เหลือเพียงแอดมินหลัก) พร้อมล้างข้อมูลใน Google Sheets ใช่หรือไม่?')) {
       setIsGlobalLoading(true);
 
-      saveOrdersToStorage([]);
+      setOrdersQueue([]);
       setOrderHistory([]);
       setActiveOrder(null);
       setCart([]);
@@ -814,7 +826,6 @@ export default function CampusBitesApp() {
 
       let assignedShopId: string | undefined = undefined;
 
-      // 🟢 1 ร้าน = 1 แอคเคาท์ (ล็อก ID ร้านค้าให้ตรงกับไอดีผู้ใช้เสมอ)
       if (authRole === 'MERCHANT') {
         assignedShopId = `shop-${cleanUsername}`;
       }
@@ -843,14 +854,13 @@ export default function CampusBitesApp() {
       const found = registeredUsers.find(u => u.username.toLowerCase() === cleanUsername);
       setIsGlobalLoading(false);
       if (found) {
+        if (!found.merchantShopId && found.role === 'MERCHANT') {
+          found.merchantShopId = `shop-${found.username}`;
+        }
         setCurrentUser(found);
         localStorage.setItem('talatnoi_current_user', JSON.stringify(found));
         initProfileEditState(found);
         if (found.role === 'MERCHANT') {
-          // หากยังไม่มี merchantShopId ให้กำหนดค่าเริ่มต้นให้ทันที
-          if (!found.merchantShopId) {
-            found.merchantShopId = `shop-${found.username}`;
-          }
           const myShop = shops.find(s => s.id === found.merchantShopId);
           if (myShop) {
             setEditShopName(myShop.name);
@@ -1025,7 +1035,7 @@ export default function CampusBitesApp() {
 
     setActiveOrder(newOrd);
     const updatedQueue = [newOrd, ...ordersQueue];
-    saveOrdersToStorage(updatedQueue);
+    setOrdersQueue(updatedQueue);
     setOrderHistory([newOrd, ...orderHistory]);
     setCart([]);
     setTransferSlipUrl('');
@@ -1043,7 +1053,7 @@ export default function CampusBitesApp() {
   const updateMerchantOrderStatus = async (orderId: string, status: OrderStatus) => {
     const targetOrder = ordersQueue.find(o => o.id === orderId);
     const updatedQueue = ordersQueue.map(o => o.id === orderId ? { ...o, status } : o);
-    saveOrdersToStorage(updatedQueue);
+    setOrdersQueue(updatedQueue);
     setOrderHistory(orderHistory.map(o => o.id === orderId ? { ...o, status } : o));
     
     if (activeOrder?.id === orderId) {
@@ -1117,30 +1127,27 @@ export default function CampusBitesApp() {
     await sendToGoogleSheet('Reviews', [newRev.id, selectedShop.name, newRev.userName, newRev.rating, newRev.comment, newRev.createdAt]);
   };
 
-  // 🟢 บันทึก/อัปเดตข้อมูลร้านค้าเดิม (อ้างอิง shopId คงที่ ป้องกันการสร้างร้านใหม่ซ้ำซ้อน)
+  // 🟢 บันทึก/ตั้งค่าข้อมูลร้านค้า (บังคับใช้ shopId เดียวกันเป๊ะ ไม่สร้างซ้ำ)
   const handleUpdateShopInfo = async (shopId: string) => {
     if (!editShopName.trim()) {
       alert('กรุณาระบุชื่อร้านค้า');
       return;
     }
 
-    // ค้นหาร้านเดิมที่มี id ตรงกัน (หรือชื่อซ้ำกัน) เพื่อรวมเป็นร้านเดียว
-    const existingShopIndex = shops.findIndex(s => s.id === shopId || s.name.trim() === editShopName.trim());
+    const cleanShopId = currentUser?.merchantShopId || shopId;
+    const existingShopIndex = shops.findIndex(s => s.id === cleanShopId);
     let updatedShops = [...shops];
 
     if (existingShopIndex >= 0) {
-      // อัปเดตร้านเดิมที่มีอยู่แล้ว
       updatedShops[existingShopIndex] = {
         ...updatedShops[existingShopIndex],
-        id: shopId, // ล็อก ID ให้ตรงกับ merchantShopId ของแอคเคาท์
         name: editShopName.trim(),
         canteenZone: editShopZone || 'โซนกลาง',
         bannerImage: editShopBanner || updatedShops[existingShopIndex].bannerImage
       };
     } else {
-      // สร้างร้านใหม่เฉพาะกรณีที่ยังไม่มีจริงๆ
       const newShopObj: Shop = {
-        id: shopId,
+        id: cleanShopId,
         name: editShopName.trim(),
         category: 'อาหารตามสั่ง',
         rating: 5.0,
@@ -1150,14 +1157,25 @@ export default function CampusBitesApp() {
         canteenZone: editShopZone || 'โซนกลาง',
         menus: []
       };
-      updatedShops = [newShopObj, ...shops];
+      updatedShops = [newShopObj, ...updatedShops];
     }
 
-    // กรองร้านค้าที่ชื่อว่างออก เพื่อไม่ให้เกิดร้านผี
-    updatedShops = updatedShops.filter(s => s.name.trim().length > 0);
+    // กรองร้านค้าที่ซ้ำกันหรือชื่อว่างออก
+    const uniqueShopsMap = new Map<string, Shop>();
+    updatedShops.forEach(s => {
+      if (s.name.trim().length > 0) {
+        if (s.id === cleanShopId) {
+          uniqueShopsMap.set(cleanShopId, s);
+        } else if (!uniqueShopsMap.has(s.id)) {
+          uniqueShopsMap.set(s.id, s);
+        }
+      }
+    });
 
-    saveShopsToStorage(updatedShops);
-    const current = updatedShops.find(s => s.id === shopId);
+    const finalShops = Array.from(uniqueShopsMap.values());
+    saveShopsToStorage(finalShops);
+
+    const current = finalShops.find(s => s.id === cleanShopId);
     if (current) {
       await sendToGoogleSheet('Shops', [current.id, current.name, current.category, current.rating, current.reviewCount, current.bannerImage, current.isOpen, current.canteenZone, JSON.stringify(current.menus)]);
     }
@@ -1228,7 +1246,7 @@ export default function CampusBitesApp() {
     alert('อัปเดตเมนูอาหารเรียบร้อยแล้ว!');
   };
 
-  // 🟢 ฟังก์ชันเพิ่มเมนูใหม่ (ตรวจสอบและอัปเดตร้านเดิมที่มีอยู่แล้วทันที ไม่สร้างร้านซ้ำ)
+  // 🟢 ฟังก์ชันเพิ่มเมนูใหม่ (เพิ่มเข้าสู่ร้านค้าปัจจุบันทันทีโดยอิงจาก shopId ของบัญชี)
   const handleAddNewMenu = async (shopId: string) => {
     if (!newMenuName.trim() || !newMenuPrice) {
       alert('กรุณาระบุชื่อเมนูและราคาเริ่มต้น');
@@ -1237,9 +1255,11 @@ export default function CampusBitesApp() {
     const priceNum = parseFloat(newMenuPrice);
     if (isNaN(priceNum)) return;
 
+    const cleanShopId = currentUser?.merchantShopId || shopId;
+
     const newMenuItem: MenuItem = {
       id: `m-${Date.now()}`,
-      shopId: shopId,
+      shopId: cleanShopId,
       name: newMenuName.trim(),
       description: newMenuDesc.trim() || 'อร่อย สะอาด สดใหม่ เครื่องแน่น',
       price: priceNum,
@@ -1251,17 +1271,16 @@ export default function CampusBitesApp() {
 
     let shopFound = false;
     const updatedShops = shops.map(s => {
-      if (s.id === shopId || (currentUser?.merchantShopId && s.id === currentUser.merchantShopId)) {
+      if (s.id === cleanShopId) {
         shopFound = true;
         return { ...s, menus: [...s.menus, newMenuItem] };
       }
       return s;
     });
 
-    // หากยังไม่มีร้านใน State ให้สร้างขึ้นผูกกับ shopId ปัจจุบัน
     if (!shopFound) {
       const newShopObj: Shop = {
-        id: shopId,
+        id: cleanShopId,
         name: editShopName || currentUser?.name || 'ร้านค้าของฉัน',
         category: 'อาหารตามสั่ง',
         rating: 5.0,
@@ -1276,7 +1295,7 @@ export default function CampusBitesApp() {
     
     saveShopsToStorage(updatedShops);
 
-    const currentShop = updatedShops.find(s => s.id === shopId || s.id === currentUser?.merchantShopId);
+    const currentShop = updatedShops.find(s => s.id === cleanShopId);
     if (currentShop) {
       await sendToGoogleSheet('Shops', [
         currentShop.id, 
@@ -1852,11 +1871,10 @@ export default function CampusBitesApp() {
   }
 
   if (currentUser.role === 'MERCHANT') {
-    // 🟢 กำหนด merchantShopId ให้ผูกกับ username ของบัญชีนั้นๆ เสมอ เพื่อความเสถียร 1:1
     if (!currentUser.merchantShopId) {
       currentUser.merchantShopId = `shop-${currentUser.username}`;
     }
-    const myShop = shops.find(s => s.id === currentUser.merchantShopId || s.name.trim().toLowerCase() === editShopName.trim().toLowerCase());
+    const myShop = shops.find(s => s.id === currentUser.merchantShopId);
     const myOrders = myShop ? ordersQueue.filter(o => o.shopId === myShop.id) : [];
 
     const myDailyRevenue = myOrders
