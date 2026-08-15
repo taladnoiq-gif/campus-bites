@@ -37,7 +37,7 @@ const translations = {
     searchPlaceholder: "ค้นหาเมนูเด็ด, ร้านอาหาร...",
     allShops: "ร้านอาหารแนะนำในโรงอาหาร",
     orderFood: "สั่งเลย",
-    menuList: "เมนูอาหารทั้งหมด",
+    menuList: "เมนูอาหารทั้งหมดในร้าน",
     reviewTitle: "รีวิวความอร่อย",
     submitReview: "ส่งรีวิว",
     takeaway: "ห่อกลับบ้าน 🛍️",
@@ -128,7 +128,7 @@ const translations = {
     resetSystemTitle: "⚡ ระบบรีเซ็ตค่าเริ่มต้น (Master Reset)",
     resetSystemDesc: "การดำเนินการนี้จะล้างยอดขายรายวัน/รายเดือน ลบคำสั่งซื้อทั้งหมด และลบผู้ใช้ทั้งหมด (เหลือเพียงแอดมินหลัก) ในระบบและ Google Sheets ทันที",
     executeResetBtn: "🚨 ยืนยันล้างข้อมูลและรีเซ็ตทั้งหมดทันที",
-    loadingText: "กำลังซิงค์ข้อมูลลง Google Sheets..."
+    loadingText: "กำลังซิงค์ข้อมูล..."
   },
   zh: {
     flag: "🇨🇳",
@@ -244,7 +244,7 @@ const translations = {
     resetSystemTitle: "⚡ 系统主重置 (Master Reset)",
     resetSystemDesc: "此操作将清除所有日/月销售额、所有订单及所有用户（除最高管理员外），恢复初始状态。",
     executeResetBtn: "🚨 确认立即清除并重置所有数据",
-    loadingText: "正在同步至 Google Sheets..."
+    loadingText: "同步中..."
   },
   en: {
     flag: "🇬🇧",
@@ -360,7 +360,7 @@ const translations = {
     resetSystemTitle: "⚡ Master System Reset",
     resetSystemDesc: "This action will clear all daily/monthly revenue, delete all active orders, and remove all users except the super admin.",
     executeResetBtn: "🚨 Confirm & Clear All Data Now",
-    loadingText: "Syncing data to Google Sheets..."
+    loadingText: "Loading..."
   }
 };
 
@@ -631,27 +631,6 @@ export default function CampusBitesApp() {
 
           setOrdersQueue(formattedOrders);
           setOrderHistory(formattedOrders);
-
-          if (currentUser?.role === 'MERCHANT' && currentUser.merchantShopId) {
-            const myLatestPending = formattedOrders.find(
-              o => o.shopId === currentUser.merchantShopId && o.status === 'PENDING'
-            );
-            if (myLatestPending && myLatestPending.id !== lastAlertedOrderId.current) {
-              lastAlertedOrderId.current = myLatestPending.id;
-              playSoundAlert(`มีออเดอร์ใหม่เข้ามา คิวที่ ${myLatestPending.queueNumber}`);
-            }
-          }
-
-          if (currentUser?.role === 'STUDENT') {
-            const readyOrder = formattedOrders.find(
-              o => o.customerUsername === currentUser.username.toLowerCase() && o.status === 'READY'
-            );
-            if (readyOrder && readyOrder.id !== lastAlertedOrderId.current) {
-              lastAlertedOrderId.current = readyOrder.id;
-              setReadyNotificationOrder(readyOrder);
-              playSoundAlert(`อาหารคิวที่ ${readyOrder.queueNumber} จากร้าน ${readyOrder.shopName} เสร็จเรียบร้อยแล้วค่ะ`);
-            }
-          }
         }
       }
     } catch (e) {}
