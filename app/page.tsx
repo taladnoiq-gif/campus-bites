@@ -574,7 +574,7 @@ export default function CampusBitesApp() {
             isOpen: row[6] !== false && String(row[6]).toUpperCase() !== 'FALSE',
             canteenZone: String(row[7] || 'โซนกลาง'),
             menus: row[8] ? (typeof row[8] === 'string' ? JSON.parse(row[8]) : row[8]) : []
-          })).filter(s => s.id.length > 0 && s.name.trim().length > 0); // 🟢 เฉพาะร้านที่มีการตั้งชื่อแล้วเท่านั้นถึงจะนำมาโชว์ในแอป
+          })).filter(s => s.id.length > 0 && s.name.trim().length > 0);
 
           setShops(formattedShops);
           localStorage.setItem('talatnoi_q_shops', JSON.stringify(formattedShops));
@@ -808,7 +808,6 @@ export default function CampusBitesApp() {
 
       let assignedShopId: string | undefined = undefined;
 
-      // 🟢 1 ร้าน = 1 แอคเคาท์ (ผูกไอดีร้านค้าทันทีเมื่อสมัคร)
       if (authRole === 'MERCHANT') {
         assignedShopId = `shop-${Date.now()}`;
       }
@@ -832,7 +831,6 @@ export default function CampusBitesApp() {
 
       await sendToGoogleSheet('Users', [newUser.id, newUser.name, newUser.username, newUser.role, '-', newUser.merchantShopId || '-']);
       setIsGlobalLoading(false);
-      alert('ลงทะเบียนสำเร็จ! กรุณากรอกข้อมูลตั้งค่าร้านค้าของคุณให้เรียบร้อยเพื่อเปิดใช้งานร้านในระบบ');
       changeTab(authRole === 'MERCHANT' ? 'MERCHANT_SETUP' : authRole === 'ADMIN' ? 'ADMIN_DASHBOARD' : 'HOME');
     } else {
       const found = registeredUsers.find(u => u.username.toLowerCase() === cleanUsername);
@@ -1092,7 +1090,6 @@ export default function CampusBitesApp() {
     await sendToGoogleSheet('Reviews', [newRev.id, selectedShop.name, newRev.userName, newRev.rating, newRev.comment, newRev.createdAt]);
   };
 
-  // 🟢 1 ร้าน = 1 แอคเคาท์ (บันทึกข้อมูลร้านค้า เมื่อใส่ชื่อแล้วจึงจะแสดงโชว์ในแอป)
   const handleUpdateShopInfo = async (shopId: string) => {
     if (!editShopName.trim()) {
       alert('กรุณาระบุชื่อร้านค้า');
@@ -1631,7 +1628,6 @@ export default function CampusBitesApp() {
                           >
                             <Power className="w-3.5 h-3.5" /> {shop.isOpen ? 'ปิดร้าน' : 'เปิดร้าน'}
                           </button>
-                          {/* 🟢 ปุ่มถังขยะให้แอดมินลบร้านค้าได้จริง */}
                           <button 
                             onClick={() => handleDeleteShopByAdmin(shop.id)} 
                             className="bg-red-600 hover:bg-red-700 text-white px-3.5 py-2 rounded-xl font-bold flex items-center justify-center shadow cursor-pointer"
@@ -1798,14 +1794,15 @@ export default function CampusBitesApp() {
                 <div className="space-y-2 pt-2 text-left text-xs">
                   <input type="text" value={editShopName} onChange={e => setEditShopName(e.target.value)} placeholder="ชื่อร้านค้าของคุณ" className="w-full bg-white border border-red-300 rounded-xl px-3 py-2 text-xs" />
                   <input type="text" value={editShopZone} onChange={e => setEditShopZone(e.target.value)} placeholder="โซนโรงอาหาร เช่น โซน A" className="w-full bg-white border border-red-300 rounded-xl px-3 py-2 text-xs" />
+                  {/* 🟢 แก้ไขปุ่มให้กดเปลี่ยนแท็บไปหน้าตั้งค่าร้านค้าได้ทันที */}
                   <button onClick={() => {
-                    const newShopId = `shop-${Date.now()}`;
+                    const newShopId = currentUser.merchantShopId || `shop-${Date.now()}`;
                     const updatedUser = { ...currentUser, merchantShopId: newShopId };
                     setCurrentUser(updatedUser);
                     localStorage.setItem('talatnoi_current_user', JSON.stringify(updatedUser));
                     saveUsersToStorage(registeredUsers.map(u => u.id === currentUser.id ? updatedUser : u));
                     changeTab('MERCHANT_SETUP');
-                  }} className="w-full bg-red-600 text-white py-2.5 rounded-xl font-bold shadow">
+                  }} className="w-full bg-red-600 text-white py-2.5 rounded-xl font-bold shadow cursor-pointer">
                     ไปที่หน้าตั้งค่าข้อมูลร้านค้า
                   </button>
                 </div>
@@ -1895,7 +1892,7 @@ export default function CampusBitesApp() {
                         </div>
                       )}
                     </div>
-                    <button onClick={() => handleUpdateShopInfo(myShop.id)} className="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl font-black text-xs transition-colors shadow">
+                    <button onClick={() => handleUpdateShopInfo(myShop.id)} className="w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl font-black text-xs transition-colors shadow cursor-pointer">
                       {t.saveShopInfo}
                     </button>
                   </div>
@@ -1957,7 +1954,7 @@ export default function CampusBitesApp() {
                         <button 
                           type="button" 
                           onClick={handleAddTempAddon} 
-                          className="bg-red-600 text-white px-3 py-2 rounded-xl font-black hover:bg-red-700 transition-colors shrink-0 text-xs shadow"
+                          className="bg-red-600 text-white px-3 py-2 rounded-xl font-black hover:bg-red-700 transition-colors shrink-0 text-xs shadow cursor-pointer"
                         >
                           {t.addAddonBtn}
                         </button>
@@ -1970,7 +1967,7 @@ export default function CampusBitesApp() {
                               <span className="text-red-950 font-medium">{ad.name}</span>
                               <div className="flex items-center gap-2">
                                 <span className="text-red-600 font-bold">{ad.price === 0 ? 'ฟรี' : `+฿${ad.price}`}</span>
-                                <button type="button" onClick={() => handleRemoveTempAddon(ad.id)} className="text-red-600 hover:text-red-800 p-0.5"><X className="w-3.5 h-3.5" /></button>
+                                <button type="button" onClick={() => handleRemoveTempAddon(ad.id)} className="text-red-600 hover:text-red-800 p-0.5 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
                               </div>
                             </div>
                           ))}
@@ -1983,7 +1980,7 @@ export default function CampusBitesApp() {
                     <button 
                       type="button" 
                       onClick={() => handleAddNewMenu(myShop.id)} 
-                      className="w-full bg-red-600 text-white py-3 rounded-xl font-black shadow-md text-xs mt-2 active:scale-95 transition-all hover:bg-red-700"
+                      className="w-full bg-red-600 text-white py-3 rounded-xl font-black shadow-md text-xs mt-2 active:scale-95 transition-all hover:bg-red-700 cursor-pointer"
                     >
                       {t.addMenuBtn}
                     </button>
@@ -2007,7 +2004,7 @@ export default function CampusBitesApp() {
                           <span className="font-black text-red-600 block">฿{m.price}</span>
                           <button 
                             onClick={() => toggleMenuAvailableStatus(myShop.id, m.id)}
-                            className={`text-[9px] font-black px-2 py-0.5 rounded-md border mt-1 ${m.isAvailable ? 'bg-red-50 text-red-600 border-red-200' : 'bg-red-200 text-red-800 border-red-300'}`}
+                            className={`text-[9px] font-black px-2 py-0.5 rounded-md border mt-1 cursor-pointer ${m.isAvailable ? 'bg-red-50 text-red-600 border-red-200' : 'bg-red-200 text-red-800 border-red-300'}`}
                           >
                             {m.isAvailable ? t.availableBadge : t.soldOutBadge}
                           </button>
@@ -2080,9 +2077,9 @@ export default function CampusBitesApp() {
                       </div>
 
                       <div className="flex gap-2 pt-1">
-                        {ord.status === 'PENDING' && <button onClick={() => updateMerchantOrderStatus(ord.id, 'COOKING')} className="flex-1 bg-red-600 text-white py-2.5 rounded-xl text-xs font-black shadow">{t.actionCook}</button>}
-                        {ord.status === 'COOKING' && <button onClick={() => updateMerchantOrderStatus(ord.id, 'READY')} className="flex-1 bg-red-700 text-white py-2.5 rounded-xl text-xs font-black shadow">{t.actionReady}</button>}
-                        {ord.status === 'READY' && <button onClick={() => updateMerchantOrderStatus(ord.id, 'COMPLETED')} className="flex-1 bg-red-900 text-white py-2.5 rounded-xl text-xs font-bold shadow">{t.actionDone}</button>}
+                        {ord.status === 'PENDING' && <button onClick={() => updateMerchantOrderStatus(ord.id, 'COOKING')} className="flex-1 bg-red-600 text-white py-2.5 rounded-xl text-xs font-black shadow cursor-pointer">{t.actionCook}</button>}
+                        {ord.status === 'COOKING' && <button onClick={() => updateMerchantOrderStatus(ord.id, 'READY')} className="flex-1 bg-red-700 text-white py-2.5 rounded-xl text-xs font-black shadow cursor-pointer">{t.actionReady}</button>}
+                        {ord.status === 'READY' && <button onClick={() => updateMerchantOrderStatus(ord.id, 'COMPLETED')} className="flex-1 bg-red-900 text-white py-2.5 rounded-xl text-xs font-bold shadow cursor-pointer">{t.actionDone}</button>}
                       </div>
                     </div>
                   ))
@@ -2117,7 +2114,7 @@ export default function CampusBitesApp() {
           </div>
           <div className="flex items-center gap-2">
             <LanguageSelector />
-            <button onClick={handleLogout} className="text-xs text-red-600 bg-red-50 border border-red-300 px-3 py-1 rounded-xl font-bold flex items-center gap-1 hover:bg-red-100"><LogOut className="w-3 h-3" /> {t.logout}</button>
+            <button onClick={handleLogout} className="text-xs text-red-600 bg-red-50 border border-red-300 px-3 py-1 rounded-xl font-bold flex items-center gap-1 hover:bg-red-100 cursor-pointer"><LogOut className="w-3 h-3" /> {t.logout}</button>
           </div>
         </header>
 
@@ -2129,9 +2126,9 @@ export default function CampusBitesApp() {
             </div>
 
             <div className="flex gap-2 overflow-x-auto pb-1 text-[11px] font-black no-scrollbar">
-              <button onClick={() => setSelectedCategoryFilter('ALL')} className={`px-3 py-1.5 rounded-xl border whitespace-nowrap transition-all ${selectedCategoryFilter === 'ALL' ? 'bg-red-600 text-white border-red-600 shadow-md' : 'bg-white text-red-700 border-red-300'}`}>{t.catAll}</button>
-              <button onClick={() => setSelectedCategoryFilter('อาหารตามสั่ง')} className={`px-3 py-1.5 rounded-xl border whitespace-nowrap transition-all ${selectedCategoryFilter === 'อาหารตามสั่ง' ? 'bg-red-600 text-white border-red-600 shadow-md' : 'bg-white text-red-700 border-red-300'}`}>{t.catRice}</button>
-              <button onClick={() => setSelectedCategoryFilter('ก๋วยเตี๋ยว')} className={`px-3 py-1.5 rounded-xl border whitespace-nowrap transition-all ${selectedCategoryFilter === 'ก๋วยเตี๋ยว' ? 'bg-red-600 text-white border-red-600 shadow-md' : 'bg-white text-red-700 border-red-300'}`}>{t.catNoodle}</button>
+              <button onClick={() => setSelectedCategoryFilter('ALL')} className={`px-3 py-1.5 rounded-xl border whitespace-nowrap transition-all cursor-pointer ${selectedCategoryFilter === 'ALL' ? 'bg-red-600 text-white border-red-600 shadow-md' : 'bg-white text-red-700 border-red-300'}`}>{t.catAll}</button>
+              <button onClick={() => setSelectedCategoryFilter('อาหารตามสั่ง')} className={`px-3 py-1.5 rounded-xl border whitespace-nowrap transition-all cursor-pointer ${selectedCategoryFilter === 'อาหารตามสั่ง' ? 'bg-red-600 text-white border-red-600 shadow-md' : 'bg-white text-red-700 border-red-300'}`}>{t.catRice}</button>
+              <button onClick={() => setSelectedCategoryFilter('ก๋วยเตี๋ยว')} className={`px-3 py-1.5 rounded-xl border whitespace-nowrap transition-all cursor-pointer ${selectedCategoryFilter === 'ก๋วยเตี๋ยว' ? 'bg-red-600 text-white border-red-600 shadow-md' : 'bg-white text-red-700 border-red-300'}`}>{t.catNoodle}</button>
             </div>
 
             <div className="bg-red-600 rounded-3xl p-4 text-white flex justify-between items-center shadow-lg shadow-red-600/20 border border-red-700">
@@ -2194,7 +2191,7 @@ export default function CampusBitesApp() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={selectedShop.bannerImage} alt={selectedShop.name} className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-red-950/80 via-transparent to-transparent" />
-              <button onClick={() => changeTab('HOME')} className="absolute top-3.5 left-3.5 w-9 h-9 rounded-2xl bg-white/90 backdrop-blur-md text-red-600 flex items-center justify-center border border-red-200 shadow-lg"><ArrowLeft className="w-4 h-4" /></button>
+              <button onClick={() => changeTab('HOME')} className="absolute top-3.5 left-3.5 w-9 h-9 rounded-2xl bg-white/90 backdrop-blur-md text-red-600 flex items-center justify-center border border-red-200 shadow-lg cursor-pointer"><ArrowLeft className="w-4 h-4" /></button>
               <div className="absolute bottom-3 left-4 right-4 text-white">
                 <span className="text-[10px] bg-red-600 text-white font-black px-2 py-0.5 rounded-md">{selectedShop.category}</span>
                 <h2 className="text-lg font-black tracking-tight mt-1">{selectedShop.name}</h2>
@@ -2252,12 +2249,12 @@ export default function CampusBitesApp() {
                 <form onSubmit={handleSubmitReview} className="space-y-2.5">
                   <div className="flex gap-1.5">
                     {[1, 2, 3, 4, 5].map(star => (
-                      <button type="button" key={star} onClick={() => setStarRating(star)} className={`text-xl ${star <= starRating ? 'text-red-600' : 'text-red-200'} hover:scale-110 transition-transform`}>★</button>
+                      <button type="button" key={star} onClick={() => setStarRating(star)} className={`text-xl cursor-pointer ${star <= starRating ? 'text-red-600' : 'text-red-200'} hover:scale-110 transition-transform`}>★</button>
                     ))}
                   </div>
                   <div className="flex gap-2">
                     <input type="text" required value={reviewText} onChange={e => setReviewText(e.target.value)} placeholder="เขียนความคิดเห็นของคุณ..." className="flex-1 bg-white border border-red-300 text-red-950 rounded-xl px-3 py-2 text-xs outline-none focus:border-red-600 shadow-inner" />
-                    <button type="submit" className="bg-red-600 text-white px-3.5 py-2 rounded-xl text-xs font-black shrink-0 hover:bg-red-700 shadow">{t.submitReview}</button>
+                    <button type="submit" className="bg-red-600 text-white px-3.5 py-2 rounded-xl text-xs font-black shrink-0 hover:bg-red-700 shadow cursor-pointer">{t.submitReview}</button>
                   </div>
                 </form>
                 <div className="space-y-2 pt-1">
@@ -2275,11 +2272,11 @@ export default function CampusBitesApp() {
 
         {activeTab === 'CHECKOUT' && selectedShop && (
           <div className="p-4 space-y-4 animate-in fade-in">
-            <div className="flex items-center gap-2.5"><button onClick={() => changeTab('SHOP')} className="p-1 text-red-600 hover:text-red-800"><ArrowLeft className="w-5 h-5" /></button><h2 className="font-black text-base text-red-950">สรุปรายการคำสั่งซื้อ</h2></div>
+            <div className="flex items-center gap-2.5"><button onClick={() => changeTab('SHOP')} className="p-1 text-red-600 hover:text-red-800 cursor-pointer"><ArrowLeft className="w-5 h-5" /></button><h2 className="font-black text-base text-red-950">สรุปรายการคำสั่งซื้อ</h2></div>
             
             <div className="flex bg-red-100 p-1.5 rounded-2xl text-xs font-black border border-red-300 shadow-inner">
-              <button onClick={() => setDiningMode('TAKEAWAY')} className={`flex-1 py-2.5 rounded-xl transition-all ${diningMode === 'TAKEAWAY' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}>{t.takeaway}</button>
-              <button onClick={() => setDiningMode('DINE_IN')} className={`flex-1 py-2.5 rounded-xl transition-all ${diningMode === 'DINE_IN' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}>{t.dineIn}</button>
+              <button onClick={() => setDiningMode('TAKEAWAY')} className={`flex-1 py-2.5 rounded-xl transition-all cursor-pointer ${diningMode === 'TAKEAWAY' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}>{t.takeaway}</button>
+              <button onClick={() => setDiningMode('DINE_IN')} className={`flex-1 py-2.5 rounded-xl transition-all cursor-pointer ${diningMode === 'DINE_IN' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}>{t.dineIn}</button>
             </div>
 
             {diningMode === 'DINE_IN' && <input type="text" value={tableNumber} onChange={e => setTableNumber(e.target.value)} placeholder={t.tablePlaceholder} className="w-full bg-white border border-red-300 text-red-950 rounded-2xl px-4 py-3 text-xs outline-none focus:border-red-600 shadow-inner" />}
@@ -2328,7 +2325,7 @@ export default function CampusBitesApp() {
               </div>
             </div>
 
-            <button onClick={handleConfirmPayment} disabled={isGlobalLoading} className="w-full bg-red-600 hover:bg-red-700 text-white py-3.5 rounded-2xl font-black text-xs shadow-xl shadow-red-600/30 active:scale-95 transition-all disabled:opacity-50">
+            <button onClick={handleConfirmPayment} disabled={isGlobalLoading} className="w-full bg-red-600 hover:bg-red-700 text-white py-3.5 rounded-2xl font-black text-xs shadow-xl shadow-red-600/30 active:scale-95 transition-all disabled:opacity-50 cursor-pointer">
               {t.confirmPay} (฿{cartSubtotal})
             </button>
           </div>
@@ -2347,7 +2344,7 @@ export default function CampusBitesApp() {
               <p className="text-[10px] font-bold opacity-85">{t.prepTimeLabel}: {activeOrder.prepDurationMin || 20} นาที</p>
             </div>
             <p className="text-xs text-red-800">สถานะ: <span className="text-red-600 font-bold">{getStatusText(activeOrder.status)}</span></p>
-            <button onClick={() => changeTab('HOME')} className="w-full py-3 bg-red-50 text-red-700 font-bold rounded-2xl text-xs border border-red-300 hover:bg-red-100 transition-colors shadow-sm">{t.backHome}</button>
+            <button onClick={() => changeTab('HOME')} className="w-full py-3 bg-red-50 text-red-700 font-bold rounded-2xl text-xs border border-red-300 hover:bg-red-100 transition-colors shadow-sm cursor-pointer">{t.backHome}</button>
           </div>
         )}
 
@@ -2356,9 +2353,9 @@ export default function CampusBitesApp() {
             <div className="flex justify-between items-center">
               <h3 className="font-black text-base text-red-950">{t.orderHistory}</h3>
               <div className="flex bg-red-100 p-1 rounded-xl border border-red-300 text-[10px] font-bold shadow-inner">
-                <button onClick={() => setHistoryFilter('ALL')} className={`px-2 py-1 rounded-lg ${historyFilter === 'ALL' ? 'bg-red-600 text-white' : 'text-red-700'}`}>{t.filterAll}</button>
-                <button onClick={() => setHistoryFilter('ACTIVE')} className={`px-2 py-1 rounded-lg ${historyFilter === 'ACTIVE' ? 'bg-red-600 text-white' : 'text-red-700'}`}>{t.filterActive}</button>
-                <button onClick={() => setHistoryFilter('DONE')} className={`px-2 py-1 rounded-lg ${historyFilter === 'DONE' ? 'bg-red-600 text-white' : 'text-red-700'}`}>{t.filterDone}</button>
+                <button onClick={() => setHistoryFilter('ALL')} className={`px-2 py-1 rounded-lg cursor-pointer ${historyFilter === 'ALL' ? 'bg-red-600 text-white' : 'text-red-700'}`}>{t.filterAll}</button>
+                <button onClick={() => setHistoryFilter('ACTIVE')} className={`px-2 py-1 rounded-lg cursor-pointer ${historyFilter === 'ACTIVE' ? 'bg-red-600 text-white' : 'text-red-700'}`}>{t.filterActive}</button>
+                <button onClick={() => setHistoryFilter('DONE')} className={`px-2 py-1 rounded-lg cursor-pointer ${historyFilter === 'DONE' ? 'bg-red-600 text-white' : 'text-red-700'}`}>{t.filterDone}</button>
               </div>
             </div>
 
@@ -2393,7 +2390,7 @@ export default function CampusBitesApp() {
                     <span className="font-black text-sm text-red-600">รวม ฿{ord.totalAmount}</span>
                     <button 
                       onClick={() => handleReorder(ord)}
-                      className="bg-red-600 hover:bg-red-700 text-white px-3.5 py-1.5 rounded-xl font-black text-xs flex items-center gap-1 shadow-md transition-colors"
+                      className="bg-red-600 hover:bg-red-700 text-white px-3.5 py-1.5 rounded-xl font-black text-xs flex items-center gap-1 shadow-md transition-colors cursor-pointer"
                     >
                       <RotateCcw className="w-3.5 h-3.5" /> {t.reorderBtn}
                     </button>
@@ -2450,7 +2447,7 @@ export default function CampusBitesApp() {
 
                   <button 
                     onClick={() => setIsEditingProfile(true)}
-                    className="w-full bg-white hover:bg-red-50 text-red-600 border border-red-300 py-3 rounded-2xl font-bold flex items-center justify-center gap-1.5 transition-colors mt-2 shadow-sm"
+                    className="w-full bg-white hover:bg-red-50 text-red-600 border border-red-300 py-3 rounded-2xl font-bold flex items-center justify-center gap-1.5 transition-colors mt-2 shadow-sm cursor-pointer"
                   >
                     <Edit2 className="w-4 h-4" /> {t.editProfileBtn}
                   </button>
@@ -2492,13 +2489,13 @@ export default function CampusBitesApp() {
                   <div className="flex gap-2 pt-1">
                     <button 
                       onClick={() => setIsEditingProfile(false)}
-                      className="flex-1 bg-red-100 text-red-700 py-2.5 rounded-xl font-bold border border-red-300"
+                      className="flex-1 bg-red-100 text-red-700 py-2.5 rounded-xl font-bold border border-red-300 cursor-pointer"
                     >
                       ยกเลิก
                     </button>
                     <button 
                       onClick={handleSaveProfile}
-                      className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl font-black shadow-md transition-colors"
+                      className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl font-black shadow-md transition-colors cursor-pointer"
                     >
                       {t.saveProfileBtn}
                     </button>
@@ -2511,7 +2508,7 @@ export default function CampusBitesApp() {
 
         {cart.length > 0 && activeTab !== 'CHECKOUT' && activeTab !== 'TRACKING' && (
           <div className="fixed bottom-20 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm z-30 animate-in slide-in-from-bottom-5">
-            <button onClick={() => changeTab('CHECKOUT')} className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3.5 rounded-2xl shadow-xl shadow-red-600/30 flex items-center justify-between text-xs font-black active:scale-95 transition-all border border-red-700">
+            <button onClick={() => changeTab('CHECKOUT')} className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3.5 rounded-2xl shadow-xl shadow-red-600/30 flex items-center justify-between text-xs font-black active:scale-95 transition-all border border-red-700 cursor-pointer">
               <span className="flex items-center gap-2"><ShoppingBag className="w-4 h-4" /> {t.cartLabel} ({totalCartItemCount})</span>
               <span className="text-sm font-black">฿{cartSubtotal} ➔</span>
             </button>
@@ -2519,9 +2516,9 @@ export default function CampusBitesApp() {
         )}
 
         <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white/95 backdrop-blur-xl border-t border-red-200 px-6 py-3 flex justify-between items-center z-40 text-[11px] font-black text-red-700 shadow-lg">
-          <button onClick={() => changeTab('HOME')} className={`flex flex-col items-center ${activeTab === 'HOME' ? 'text-red-600' : 'hover:text-red-900'}`}><Utensils className="w-4 h-4 mb-0.5" /> {t.home}</button>
-          <button onClick={() => changeTab('HISTORY')} className={`flex flex-col items-center ${activeTab === 'HISTORY' ? 'text-red-600' : 'hover:text-red-900'}`}><History className="w-4 h-4 mb-0.5" /> {t.history}</button>
-          <button onClick={() => changeTab('PROFILE')} className={`flex flex-col items-center ${activeTab === 'PROFILE' ? 'text-red-600' : 'hover:text-red-900'}`}><User className="w-4 h-4 mb-0.5" /> {t.profile}</button>
+          <button onClick={() => changeTab('HOME')} className={`flex flex-col items-center cursor-pointer ${activeTab === 'HOME' ? 'text-red-600' : 'hover:text-red-900'}`}><Utensils className="w-4 h-4 mb-0.5" /> {t.home}</button>
+          <button onClick={() => changeTab('HISTORY')} className={`flex flex-col items-center cursor-pointer ${activeTab === 'HISTORY' ? 'text-red-600' : 'hover:text-red-900'}`}><History className="w-4 h-4 mb-0.5" /> {t.history}</button>
+          <button onClick={() => changeTab('PROFILE')} className={`flex flex-col items-center cursor-pointer ${activeTab === 'PROFILE' ? 'text-red-600' : 'hover:text-red-900'}`}><User className="w-4 h-4 mb-0.5" /> {t.profile}</button>
         </nav>
 
         {readyNotificationOrder && (
@@ -2540,7 +2537,7 @@ export default function CampusBitesApp() {
               </div>
               <button 
                 onClick={() => setReadyNotificationOrder(null)} 
-                className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-2xl font-black text-xs shadow-md transition-colors"
+                className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-2xl font-black text-xs shadow-md transition-colors cursor-pointer"
               >
                 รับทราบแล้ว 👍
               </button>
@@ -2553,7 +2550,7 @@ export default function CampusBitesApp() {
             <div className="w-full max-w-md bg-white border-t-2 border-red-600 rounded-t-3xl p-5 space-y-4 text-red-950 max-h-[85vh] overflow-y-auto shadow-2xl">
               <div className="flex justify-between items-center">
                 <h3 className="font-black text-sm text-red-600">{selectedMenu.name}</h3>
-                <button onClick={() => setSelectedMenu(null)} className="p-1 text-red-600 hover:text-red-800"><X className="w-5 h-5" /></button>
+                <button onClick={() => setSelectedMenu(null)} className="p-1 text-red-600 hover:text-red-800 cursor-pointer"><X className="w-5 h-5" /></button>
               </div>
 
               <div className="w-full h-40 rounded-2xl overflow-hidden border border-red-200 shadow-sm">
@@ -2599,11 +2596,11 @@ export default function CampusBitesApp() {
 
               <div className="flex gap-2 pt-2">
                 <div className="flex items-center gap-2 bg-red-50 p-1 rounded-2xl border border-red-200">
-                  <button onClick={() => setMenuQty(Math.max(1, menuQty - 1))} className="w-8 h-8 bg-red-200 rounded-xl flex items-center justify-center text-red-800 active:scale-90 transition-transform"><Minus className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => setMenuQty(Math.max(1, menuQty - 1))} className="w-8 h-8 bg-red-200 rounded-xl flex items-center justify-center text-red-800 active:scale-90 transition-transform cursor-pointer"><Minus className="w-3.5 h-3.5" /></button>
                   <span className="w-6 text-center text-xs font-black text-red-950">{menuQty}</span>
-                  <button onClick={() => setMenuQty(menuQty + 1)} className="w-8 h-8 bg-red-200 rounded-xl flex items-center justify-center text-red-800 active:scale-90 transition-transform"><Plus className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => setMenuQty(menuQty + 1)} className="w-8 h-8 bg-red-200 rounded-xl flex items-center justify-center text-red-800 active:scale-90 transition-transform cursor-pointer"><Plus className="w-3.5 h-3.5" /></button>
                 </div>
-                <button onClick={handleAddToCart} className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-2xl text-xs font-black py-3 shadow-lg shadow-red-600/30 active:scale-95 transition-all">
+                <button onClick={handleAddToCart} className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-2xl text-xs font-black py-3 shadow-lg shadow-red-600/30 active:scale-95 transition-all cursor-pointer">
                   {t.addToCart} • ฿{singleItemTotal}
                 </button>
               </div>
