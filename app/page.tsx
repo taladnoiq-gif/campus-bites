@@ -127,8 +127,7 @@ const translations = {
     orderReadyModalDesc: "กรุณานำหมายเลขคิวไปติดต่อรับอาหารที่หน้าร้านได้ทันทีครับ",
     resetSystemTitle: "⚡ ระบบรีเซ็ตค่าเริ่มต้น (Master Reset)",
     resetSystemDesc: "การดำเนินการนี้จะล้างยอดขายรายวัน/รายเดือน ลบคำสั่งซื้อทั้งหมด และลบผู้ใช้ทั้งหมด (เหลือเพียงแอดมินหลัก) ในระบบและ Google Sheets ทันที",
-    executeResetBtn: "🚨 ยืนยันล้างข้อมูลและรีเซ็ตทั้งหมดทันที",
-    loadingText: "กำลังซิงค์ข้อมูลลง Google Sheets..."
+    executeResetBtn: "🚨 ยืนยันล้างข้อมูลและรีเซ็ตทั้งหมดทันที"
   },
   zh: {
     flag: "🇨🇳",
@@ -243,8 +242,7 @@ const translations = {
     orderReadyModalDesc: "请凭取餐排队号前往对应档口取餐。",
     resetSystemTitle: "⚡ 系统主重置 (Master Reset)",
     resetSystemDesc: "此操作将清除所有日/月销售额、所有订单及所有用户（除最高管理员外），恢复初始状态。",
-    executeResetBtn: "🚨 确认立即清除并重置所有数据",
-    loadingText: "正在同步至 Google Sheets..."
+    executeResetBtn: "🚨 确认立即清除并重置所有数据"
   },
   en: {
     flag: "🇬🇧",
@@ -359,8 +357,7 @@ const translations = {
     orderReadyModalDesc: "Please proceed to the stall with your queue ticket.",
     resetSystemTitle: "⚡ Master System Reset",
     resetSystemDesc: "This action will clear all daily/monthly revenue, delete all active orders, and remove all users except the super admin.",
-    executeResetBtn: "🚨 Confirm & Clear All Data Now",
-    loadingText: "Syncing data to Google Sheets..."
+    executeResetBtn: "🚨 Confirm & Clear All Data Now"
   }
 };
 
@@ -460,7 +457,6 @@ export default function CampusBitesApp() {
   const t = translations[lang];
 
   const [isGlobalLoading, setIsGlobalLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState('');
 
   const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>([DEFAULT_ADMIN]);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -578,12 +574,10 @@ export default function CampusBitesApp() {
             isOpen: row[6] !== false && String(row[6]).toUpperCase() !== 'FALSE',
             canteenZone: String(row[7] || 'โซนกลาง'),
             menus: row[8] ? (typeof row[8] === 'string' ? JSON.parse(row[8]) : row[8]) : []
-          })).filter(s => s.id.length > 0);
+          })).filter(s => s.id.length > 0 && s.name.trim().length > 0); // 🟢 เฉพาะร้านที่มีการตั้งชื่อแล้วเท่านั้นถึงจะนำมาโชว์ในแอป
 
-          if (formattedShops.length > 0) {
-            setShops(formattedShops);
-            localStorage.setItem('talatnoi_q_shops', JSON.stringify(formattedShops));
-          }
+          setShops(formattedShops);
+          localStorage.setItem('talatnoi_q_shops', JSON.stringify(formattedShops));
         }
 
         if (cloudData.orders && Array.isArray(cloudData.orders)) {
@@ -677,10 +671,44 @@ export default function CampusBitesApp() {
     } catch (err) {}
   };
 
-  const handleAdminDeleteUser = async (userId: string, username: string) => {
-    if (confirm(`ยืนยันการลบผู้ใช้งาน "${username}" ออกจากระบบและฐานข้อมูล Google Sheets?`)) {
+  const handleDeleteShopByAdmin = async (shopId: string) => {
+    if (confirm('🚨 ยืนยันการลบร้านค้านี้ออกจากระบบและฐานข้อมูล?')) {
       setIsGlobalLoading(true);
-      setLoadingMessage(t.loadingText);
+
+      const updatedShops = shops.filter(s => s.id !== shopId);
+      saveShopsToStorage(updatedShops);
+
+      const updatedUsers = registeredUsers.map(u => u.merchantShopId === shopId ? { ...u, merchantShopId: undefined } : u);
+      saveUsersToStorage(updatedUsers);
+
+      if (currentUser && currentUser.merchantShopId === shopId) {
+        const updatedCurrent = { ...currentUser, merchantShopId: undefined };
+        setCurrentUser(updatedCurrent);
+        localStorage.setItem('talatnoi_current_user', JSON.stringify(updatedCurrent));
+      }
+
+      try {
+        await fetch(GOOGLE_SHEET_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            sheet: 'Shops', 
+            action: 'deleteShop', 
+            shopId: shopId 
+          })
+        });
+        alert('ลบร้านค้าสำเร็จเรียบร้อยแล้ว');
+      } catch (e) {
+      } finally {
+        setIsGlobalLoading(false);
+      }
+    }
+  };
+
+  const handleAdminDeleteUser = async (userId: string, username: string) => {
+    if (confirm(`ยืนยันการลบผู้ใช้งาน "${username}" ออกจากระบบและฐานข้อมูล?`)) {
+      setIsGlobalLoading(true);
 
       const updatedUsers = registeredUsers.filter(u => u.id !== userId);
       saveUsersToStorage(updatedUsers);
@@ -707,7 +735,6 @@ export default function CampusBitesApp() {
   const handleMasterSystemReset = async () => {
     if (confirm('🚨 คำเตือนระดับสูงสุด: คุณต้องการรีเซ็ตระบบทั้งหมด ล้างยอดขายรายวัน/รายเดือน ลบคำสั่งซื้อทั้งหมด และลบผู้ใช้งานทั้งหมดออก (เหลือเพียงแอดมินหลัก) พร้อมล้างข้อมูลใน Google Sheets ใช่หรือไม่?')) {
       setIsGlobalLoading(true);
-      setLoadingMessage(t.loadingText);
 
       saveOrdersToStorage([]);
       setOrderHistory([]);
@@ -767,7 +794,6 @@ export default function CampusBitesApp() {
     const cleanUsername = authUsername.trim().toLowerCase();
 
     setIsGlobalLoading(true);
-    setLoadingMessage(t.loadingText);
 
     if (isRegisterMode) {
       const isUsernameTaken = registeredUsers.some(
@@ -782,23 +808,9 @@ export default function CampusBitesApp() {
 
       let assignedShopId: string | undefined = undefined;
 
+      // 🟢 1 ร้าน = 1 แอคเคาท์ (ผูกไอดีร้านค้าทันทีเมื่อสมัคร)
       if (authRole === 'MERCHANT') {
-        const newShopId = `shop-${Date.now()}`;
-        assignedShopId = newShopId;
-        const newShopObj: Shop = {
-          id: newShopId,
-          name: authName ? `ร้าน ${authName}` : 'ร้านค้าใหม่',
-          category: 'อาหารตามสั่ง',
-          rating: 5.0,
-          reviewCount: 0,
-          bannerImage: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
-          isOpen: true,
-          canteenZone: 'โซนกลางโรงอาหาร',
-          menus: []
-        };
-        const updatedShops = [newShopObj, ...shops];
-        saveShopsToStorage(updatedShops);
-        await sendToGoogleSheet('Shops', [newShopObj.id, newShopObj.name, newShopObj.category, newShopObj.rating, newShopObj.reviewCount, newShopObj.bannerImage, newShopObj.isOpen, newShopObj.canteenZone, JSON.stringify([])]);
+        assignedShopId = `shop-${Date.now()}`;
       }
 
       const newUser: UserProfile = {
@@ -820,8 +832,8 @@ export default function CampusBitesApp() {
 
       await sendToGoogleSheet('Users', [newUser.id, newUser.name, newUser.username, newUser.role, '-', newUser.merchantShopId || '-']);
       setIsGlobalLoading(false);
-      alert('ลงทะเบียนสำเร็จและซิงค์ข้อมูลกับชีทแล้ว!');
-      changeTab(authRole === 'MERCHANT' ? 'MERCHANT_KDS' : authRole === 'ADMIN' ? 'ADMIN_DASHBOARD' : 'HOME');
+      alert('ลงทะเบียนสำเร็จ! กรุณากรอกข้อมูลตั้งค่าร้านค้าของคุณให้เรียบร้อยเพื่อเปิดใช้งานร้านในระบบ');
+      changeTab(authRole === 'MERCHANT' ? 'MERCHANT_SETUP' : authRole === 'ADMIN' ? 'ADMIN_DASHBOARD' : 'HOME');
     } else {
       const found = registeredUsers.find(u => u.username.toLowerCase() === cleanUsername);
       setIsGlobalLoading(false);
@@ -830,13 +842,15 @@ export default function CampusBitesApp() {
         localStorage.setItem('talatnoi_current_user', JSON.stringify(found));
         initProfileEditState(found);
         if (found.role === 'MERCHANT') {
-          const myShop = shops.find(s => s.id === found.merchantShopId) || shops[0];
+          const myShop = shops.find(s => s.id === found.merchantShopId);
           if (myShop) {
             setEditShopName(myShop.name);
             setEditShopZone(myShop.canteenZone);
             setEditShopBanner(myShop.bannerImage);
+            changeTab('MERCHANT_KDS');
+          } else {
+            changeTab('MERCHANT_SETUP');
           }
-          changeTab('MERCHANT_KDS');
         } else if (found.role === 'ADMIN') {
           changeTab('ADMIN_DASHBOARD');
         } else {
@@ -951,7 +965,6 @@ export default function CampusBitesApp() {
   const handleConfirmPayment = async () => {
     if (!selectedShop) return;
     setIsGlobalLoading(true);
-    setLoadingMessage(t.loadingText);
 
     const today = new Date().toISOString().split('T')[0];
 
@@ -1079,19 +1092,45 @@ export default function CampusBitesApp() {
     await sendToGoogleSheet('Reviews', [newRev.id, selectedShop.name, newRev.userName, newRev.rating, newRev.comment, newRev.createdAt]);
   };
 
+  // 🟢 1 ร้าน = 1 แอคเคาท์ (บันทึกข้อมูลร้านค้า เมื่อใส่ชื่อแล้วจึงจะแสดงโชว์ในแอป)
   const handleUpdateShopInfo = async (shopId: string) => {
-    const updatedShops = shops.map(s => s.id === shopId ? { 
-      ...s, 
-      name: editShopName, 
-      canteenZone: editShopZone, 
-      bannerImage: editShopBanner || s.bannerImage 
-    } : s);
+    if (!editShopName.trim()) {
+      alert('กรุณาระบุชื่อร้านค้า');
+      return;
+    }
+
+    const existingShopIndex = shops.findIndex(s => s.id === shopId);
+    let updatedShops = [...shops];
+
+    if (existingShopIndex >= 0) {
+      updatedShops[existingShopIndex] = {
+        ...updatedShops[existingShopIndex],
+        name: editShopName,
+        canteenZone: editShopZone || 'โซนกลาง',
+        bannerImage: editShopBanner || updatedShops[existingShopIndex].bannerImage
+      };
+    } else {
+      const newShopObj: Shop = {
+        id: shopId,
+        name: editShopName,
+        category: 'อาหารตามสั่ง',
+        rating: 5.0,
+        reviewCount: 0,
+        bannerImage: editShopBanner || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
+        isOpen: true,
+        canteenZone: editShopZone || 'โซนกลาง',
+        menus: []
+      };
+      updatedShops = [newShopObj, ...shops];
+    }
+
     saveShopsToStorage(updatedShops);
     const current = updatedShops.find(s => s.id === shopId);
     if (current) {
       await sendToGoogleSheet('Shops', [current.id, current.name, current.category, current.rating, current.reviewCount, current.bannerImage, current.isOpen, current.canteenZone, JSON.stringify(current.menus)]);
     }
-    alert('บันทึกข้อมูลร้านค้าสำเร็จและซิงค์ข้อมูลเรียบร้อยแล้ว!');
+    alert('บันทึกข้อมูลร้านค้าและเปิดหน้าร้านในระบบสำเร็จ!');
+    changeTab('MERCHANT_KDS');
   };
 
   const handleAdminSaveShop = (shopId: string) => {
@@ -1150,14 +1189,6 @@ export default function CampusBitesApp() {
     setNewAddonName('');
     setNewAddonPrice('');
     alert(`เพิ่มเมนู "${newMenuItem.name}" เรียบร้อยแล้ว!`);
-  };
-
-  const handleDeleteShopByAdmin = (shopId: string) => {
-    if (confirm('ยืนยันการลบร้านค้านี้ออกจากระบบ?')) {
-      const updatedShops = shops.filter(s => s.id !== shopId);
-      saveShopsToStorage(updatedShops);
-      alert('ลบร้านค้าเรียบร้อยแล้ว');
-    }
   };
 
   const handleExportCsvReport = () => {
@@ -1332,7 +1363,6 @@ export default function CampusBitesApp() {
     return (
       <div className="fixed inset-0 z-[9999] bg-white/90 backdrop-blur-md flex flex-col items-center justify-center space-y-3 animate-in fade-in">
         <Loader2 className="w-12 h-12 text-red-600 animate-spin" />
-        <p className="text-sm font-black text-red-600">{loadingMessage}</p>
       </div>
     );
   };
@@ -1601,11 +1631,12 @@ export default function CampusBitesApp() {
                           >
                             <Power className="w-3.5 h-3.5" /> {shop.isOpen ? 'ปิดร้าน' : 'เปิดร้าน'}
                           </button>
+                          {/* 🟢 ปุ่มถังขยะให้แอดมินลบร้านค้าได้จริง */}
                           <button 
                             onClick={() => handleDeleteShopByAdmin(shop.id)} 
-                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-xl font-bold flex items-center justify-center shadow"
+                            className="bg-red-600 hover:bg-red-700 text-white px-3.5 py-2 rounded-xl font-bold flex items-center justify-center shadow cursor-pointer"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
@@ -1763,33 +1794,19 @@ export default function CampusBitesApp() {
             {!myShop ? (
               <div className="text-center py-20 space-y-3 bg-white border border-red-200 rounded-3xl p-6 shadow-sm">
                 <AlertCircle className="w-12 h-12 text-red-500 mx-auto" />
-                <p className="text-xs text-red-800 font-bold">ยังไม่ได้เชื่อมโยงร้านค้ากับบัญชีนี้ กรุณากรอกตั้งค่าร้านค้าด้านล่างเพื่อเปิดร้าน</p>
+                <p className="text-xs text-red-800 font-bold">บัญชีของคุณยังไม่มีการตั้งค่าร้านค้า กรุณากรอกข้อมูลร้านด้านล่างเพื่อเปิดใช้งานร้านในระบบ</p>
                 <div className="space-y-2 pt-2 text-left text-xs">
                   <input type="text" value={editShopName} onChange={e => setEditShopName(e.target.value)} placeholder="ชื่อร้านค้าของคุณ" className="w-full bg-white border border-red-300 rounded-xl px-3 py-2 text-xs" />
                   <input type="text" value={editShopZone} onChange={e => setEditShopZone(e.target.value)} placeholder="โซนโรงอาหาร เช่น โซน A" className="w-full bg-white border border-red-300 rounded-xl px-3 py-2 text-xs" />
-                  <button onClick={async () => {
+                  <button onClick={() => {
                     const newShopId = `shop-${Date.now()}`;
-                    const newShopObj: Shop = {
-                      id: newShopId,
-                      name: editShopName || 'ร้านค้าใหม่',
-                      category: 'อาหารตามสั่ง',
-                      rating: 5.0,
-                      reviewCount: 0,
-                      bannerImage: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
-                      isOpen: true,
-                      canteenZone: editShopZone || 'โซนกลาง',
-                      menus: []
-                    };
-                    const updatedShops = [newShopObj, ...shops];
-                    saveShopsToStorage(updatedShops);
                     const updatedUser = { ...currentUser, merchantShopId: newShopId };
                     setCurrentUser(updatedUser);
                     localStorage.setItem('talatnoi_current_user', JSON.stringify(updatedUser));
                     saveUsersToStorage(registeredUsers.map(u => u.id === currentUser.id ? updatedUser : u));
-                    await sendToGoogleSheet('Shops', [newShopObj.id, newShopObj.name, newShopObj.category, newShopObj.rating, newShopObj.reviewCount, newShopObj.bannerImage, newShopObj.isOpen, newShopObj.canteenZone, JSON.stringify([])]);
-                    alert('สร้างร้านค้าสำเร็จเรียบร้อยแล้ว!');
+                    changeTab('MERCHANT_SETUP');
                   }} className="w-full bg-red-600 text-white py-2.5 rounded-xl font-bold shadow">
-                    บันทึกและเปิดร้านค้าทันที
+                    ไปที่หน้าตั้งค่าข้อมูลร้านค้า
                   </button>
                 </div>
               </div>
@@ -1855,11 +1872,11 @@ export default function CampusBitesApp() {
                   <div className="space-y-2.5 text-xs">
                     <div>
                       <label className="block text-[11px] font-bold text-red-700 mb-1">{t.shopNameLabel}</label>
-                      <input type="text" value={editShopName} onChange={e => setEditShopName(e.target.value)} className="w-full bg-white border border-red-300 rounded-xl px-3 py-2 text-xs font-bold text-red-950 outline-none focus:border-red-600" />
+                      <input type="text" value={editShopName} onChange={e => setEditShopName(e.target.value)} placeholder="เช่น ร้านกะเพราแซ่บเวอร์" className="w-full bg-white border border-red-300 rounded-xl px-3 py-2 text-xs font-bold text-red-950 outline-none focus:border-red-600" />
                     </div>
                     <div>
                       <label className="block text-[11px] font-bold text-red-700 mb-1">{t.zoneLabel}</label>
-                      <input type="text" value={editShopZone} onChange={e => setEditShopZone(e.target.value)} className="w-full bg-white border border-red-300 rounded-xl px-3 py-2 text-xs text-red-950 outline-none focus:border-red-600" />
+                      <input type="text" value={editShopZone} onChange={e => setEditShopZone(e.target.value)} placeholder="เช่น โดมแรก, โซน A" className="w-full bg-white border border-red-300 rounded-xl px-3 py-2 text-xs text-red-950 outline-none focus:border-red-600" />
                     </div>
                     <div>
                       <label className="block text-[11px] font-bold text-red-700 mb-1 flex items-center gap-1">
@@ -1871,10 +1888,10 @@ export default function CampusBitesApp() {
                         onChange={(e) => handleImageUpload(e, setEditShopBanner)} 
                         className="w-full text-xs text-red-700 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-red-600 file:text-white hover:file:bg-red-700 cursor-pointer" 
                       />
-                      {editShopBanner && (
+                      {(editShopBanner || myShop.bannerImage) && (
                         <div className="mt-2 w-24 h-24 rounded-2xl overflow-hidden border border-red-200 shadow-sm">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={editShopBanner} alt="Shop Preview" className="w-full h-full object-cover" />
+                          <img src={editShopBanner || myShop.bannerImage} alt="Shop Preview" className="w-full h-full object-cover" />
                         </div>
                       )}
                     </div>
@@ -2580,7 +2597,7 @@ export default function CampusBitesApp() {
                 <input type="text" value={specialNote} onChange={e => setSpecialNote(e.target.value)} placeholder={t.notePlaceholder} className="w-full bg-white border border-red-300 text-red-950 rounded-xl px-3 py-2 text-xs outline-none focus:border-red-600 shadow-inner" />
               </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-2 pt-2">
                 <div className="flex items-center gap-2 bg-red-50 p-1 rounded-2xl border border-red-200">
                   <button onClick={() => setMenuQty(Math.max(1, menuQty - 1))} className="w-8 h-8 bg-red-200 rounded-xl flex items-center justify-center text-red-800 active:scale-90 transition-transform"><Minus className="w-3.5 h-3.5" /></button>
                   <span className="w-6 text-center text-xs font-black text-red-950">{menuQty}</span>
