@@ -37,7 +37,7 @@ const translations = {
     searchPlaceholder: "ค้นหาเมนูเด็ด, ร้านอาหาร...",
     allShops: "ร้านอาหารแนะนำในโรงอาหาร",
     orderFood: "สั่งเลย",
-    menuList: "เมนูอาหารทั้งหมดในร้าน",
+    menuList: "เมนูอาหารทั้งหมด",
     reviewTitle: "รีวิวความอร่อย",
     submitReview: "ส่งรีวิว",
     takeaway: "ห่อกลับบ้าน 🛍️",
@@ -127,7 +127,8 @@ const translations = {
     orderReadyModalDesc: "กรุณานำหมายเลขคิวไปติดต่อรับอาหารที่หน้าร้านได้ทันทีครับ",
     resetSystemTitle: "⚡ ระบบรีเซ็ตค่าเริ่มต้น (Master Reset)",
     resetSystemDesc: "การดำเนินการนี้จะล้างยอดขายรายวัน/รายเดือน ลบคำสั่งซื้อทั้งหมด และลบผู้ใช้ทั้งหมด (เหลือเพียงแอดมินหลัก) ในระบบและ Google Sheets ทันที",
-    executeResetBtn: "🚨 ยืนยันล้างข้อมูลและรีเซ็ตทั้งหมดทันที"
+    executeResetBtn: "🚨 ยืนยันล้างข้อมูลและรีเซ็ตทั้งหมดทันที",
+    loadingText: "กำลังซิงค์ข้อมูลลง Google Sheets..."
   },
   zh: {
     flag: "🇨🇳",
@@ -242,7 +243,8 @@ const translations = {
     orderReadyModalDesc: "请凭取餐排队号前往对应档口取餐。",
     resetSystemTitle: "⚡ 系统主重置 (Master Reset)",
     resetSystemDesc: "此操作将清除所有日/月销售额、所有订单及所有用户（除最高管理员外），恢复初始状态。",
-    executeResetBtn: "🚨 确认立即清除并重置所有数据"
+    executeResetBtn: "🚨 确认立即清除并重置所有数据",
+    loadingText: "正在同步至 Google Sheets..."
   },
   en: {
     flag: "🇬🇧",
@@ -357,7 +359,8 @@ const translations = {
     orderReadyModalDesc: "Please proceed to the stall with your queue ticket.",
     resetSystemTitle: "⚡ Master System Reset",
     resetSystemDesc: "This action will clear all daily/monthly revenue, delete all active orders, and remove all users except the super admin.",
-    executeResetBtn: "🚨 Confirm & Clear All Data Now"
+    executeResetBtn: "🚨 Confirm & Clear All Data Now",
+    loadingText: "Syncing data to Google Sheets..."
   }
 };
 
@@ -457,6 +460,7 @@ export default function CampusBitesApp() {
   const t = translations[lang];
 
   const [isGlobalLoading, setIsGlobalLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
 
   const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>([DEFAULT_ADMIN]);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -623,7 +627,6 @@ export default function CampusBitesApp() {
             slipImageUrl: String(row[14] || '')
           })).filter(o => o.id.length > 0);
 
-          // 🟢 เรียงลำดับให้ออเดอร์ใหม่ล่าสุดขึ้นมาอยู่ด้านบนเสมอ
           formattedOrders.sort((a, b) => b.id.localeCompare(a.id));
 
           setOrdersQueue(formattedOrders);
@@ -693,6 +696,7 @@ export default function CampusBitesApp() {
   const handleDeleteShopByAdmin = async (shopId: string) => {
     if (confirm('🚨 ยืนยันการลบร้านค้านี้ออกจากระบบและฐานข้อมูล?')) {
       setIsGlobalLoading(true);
+      setLoadingMessage(t.loadingText);
 
       const updatedShops = shops.filter(s => s.id !== shopId);
       saveShopsToStorage(updatedShops);
@@ -728,6 +732,7 @@ export default function CampusBitesApp() {
   const handleAdminDeleteUser = async (userId: string, username: string) => {
     if (confirm(`ยืนยันการลบผู้ใช้งาน "${username}" ออกจากระบบและฐานข้อมูล?`)) {
       setIsGlobalLoading(true);
+      setLoadingMessage(t.loadingText);
 
       const updatedUsers = registeredUsers.filter(u => u.id !== userId);
       saveUsersToStorage(updatedUsers);
@@ -754,6 +759,7 @@ export default function CampusBitesApp() {
   const handleMasterSystemReset = async () => {
     if (confirm('🚨 คำเตือนระดับสูงสุด: คุณต้องการรีเซ็ตระบบทั้งหมด ล้างยอดขายรายวัน/รายเดือน ลบคำสั่งซื้อทั้งหมด และลบผู้ใช้งานทั้งหมดออก (เหลือเพียงแอดมินหลัก) พร้อมล้างข้อมูลใน Google Sheets ใช่หรือไม่?')) {
       setIsGlobalLoading(true);
+      setLoadingMessage(t.loadingText);
 
       setOrdersQueue([]);
       setOrderHistory([]);
@@ -813,6 +819,7 @@ export default function CampusBitesApp() {
     const cleanUsername = authUsername.trim().toLowerCase();
 
     setIsGlobalLoading(true);
+    setLoadingMessage(t.loadingText);
 
     if (isRegisterMode) {
       const isUsernameTaken = registeredUsers.some(
@@ -892,6 +899,7 @@ export default function CampusBitesApp() {
   const handleSaveProfile = async () => {
     if (!currentUser) return;
     setIsGlobalLoading(true);
+    setLoadingMessage(t.loadingText);
 
     const updatedUser: UserProfile = {
       ...currentUser,
@@ -1001,6 +1009,7 @@ export default function CampusBitesApp() {
   const handleConfirmPayment = async () => {
     if (!selectedShop) return;
     setIsGlobalLoading(true);
+    setLoadingMessage(t.loadingText);
 
     const today = new Date().toISOString().split('T')[0];
 
@@ -1034,7 +1043,6 @@ export default function CampusBitesApp() {
       slipImageUrl: transferSlipUrl || 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80'
     };
 
-    // 🟢 แทรกล่าสุดไว้ด้านบนสุดของคิวเสมอ
     const updatedQueue = [newOrd, ...ordersQueue];
     setOrdersQueue(updatedQueue);
     setOrderHistory([newOrd, ...orderHistory]);
@@ -1128,7 +1136,6 @@ export default function CampusBitesApp() {
     await sendToGoogleSheet('Reviews', [newRev.id, selectedShop.name, newRev.userName, newRev.rating, newRev.comment, newRev.createdAt]);
   };
 
-  // 🟢 บันทึก/ตั้งค่าข้อมูลร้านค้า 1 ร้าน = 1 ID ตายตัว
   const handleUpdateShopInfo = async (shopId: string) => {
     if (!editShopName.trim()) {
       alert('กรุณาระบุชื่อร้านค้า');
@@ -1483,6 +1490,7 @@ export default function CampusBitesApp() {
     return (
       <div className="fixed inset-0 z-[9999] bg-white/90 backdrop-blur-md flex flex-col items-center justify-center space-y-3 animate-in fade-in">
         <Loader2 className="w-12 h-12 text-red-600 animate-spin" />
+        <p className="text-sm font-black text-red-600">{loadingMessage}</p>
       </div>
     );
   };
@@ -1868,7 +1876,6 @@ export default function CampusBitesApp() {
     const myShop = shops.find(s => s.id === currentUser.merchantShopId);
     const myOrders = myShop ? ordersQueue.filter(o => o.shopId === myShop.id) : [];
 
-    // 🟢 คำนวณรายได้รายวันและรายเดือนให้สัมพันธ์กัน
     const myDailyRevenue = myOrders
       .filter(o => o.status === 'COMPLETED' && o.createdAt === currentDate)
       .reduce((sum, o) => sum + o.totalAmount, 0);
@@ -2576,7 +2583,7 @@ export default function CampusBitesApp() {
           </div>
         )}
 
-        {activeTab === 'PROFILE' && (
+        {activeTab === 'PROFILE' && currentUser && (
           <div className="p-4 space-y-4 animate-in fade-in">
             <div className="bg-white border border-red-200 rounded-3xl p-6 shadow-md space-y-5 relative">
               <div className="flex items-center gap-4">
@@ -2790,7 +2797,7 @@ export default function CampusBitesApp() {
                             <span className="font-bold">{addon.name}</span>
                           </div>
                           <span className="font-black text-red-600">
-                            {addon.price === 0 ? 'ฟรี' : `+฿{addon.price}`}
+                            {addon.price === 0 ? 'ฟรี' : `+฿${addon.price}`}
                           </span>
                         </div>
                       );
