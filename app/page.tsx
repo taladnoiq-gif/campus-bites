@@ -623,6 +623,9 @@ export default function CampusBitesApp() {
             slipImageUrl: String(row[14] || '')
           })).filter(o => o.id.length > 0);
 
+          // 🟢 เรียงลำดับให้ออเดอร์ใหม่ล่าสุดขึ้นมาอยู่ด้านบนเสมอ
+          formattedOrders.sort((a, b) => b.id.localeCompare(a.id));
+
           setOrdersQueue(formattedOrders);
           setOrderHistory(formattedOrders);
 
@@ -1031,7 +1034,7 @@ export default function CampusBitesApp() {
       slipImageUrl: transferSlipUrl || 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80'
     };
 
-    setActiveOrder(newOrd);
+    // 🟢 แทรกล่าสุดไว้ด้านบนสุดของคิวเสมอ
     const updatedQueue = [newOrd, ...ordersQueue];
     setOrdersQueue(updatedQueue);
     setOrderHistory([newOrd, ...orderHistory]);
@@ -1158,14 +1161,12 @@ export default function CampusBitesApp() {
       updatedShops = [newShopObj, ...updatedShops];
     }
 
-    // กรองและรวมร้านค้าที่มี ID เดียวกันให้เป็นร้านเดียวเสมอ
     const uniqueMap = new Map<string, Shop>();
     updatedShops.forEach(s => {
       if (s.id === cleanShopId) {
         if (!uniqueMap.has(cleanShopId)) {
           uniqueMap.set(cleanShopId, s);
         } else {
-          // รวมเมนูเข้าด้วยกัน
           const existing = uniqueMap.get(cleanShopId)!;
           const menuMap = new Map<string, MenuItem>();
           [...existing.menus, ...s.menus].forEach(m => menuMap.set(m.id, m));
@@ -1252,7 +1253,6 @@ export default function CampusBitesApp() {
     alert('อัปเดตเมนูอาหารเรียบร้อยแล้ว!');
   };
 
-  // 🟢 เพิ่มเมนูเข้าสู่ร้านปัจจุบันโดยอิงจาก cleanShopId (1 ร้านมีหลายเมนู ไม่สร้างร้านใหม่)
   const handleAddNewMenu = async (shopId: string) => {
     if (!newMenuName.trim() || !newMenuPrice) {
       alert('กรุณาระบุชื่อเมนูและราคาเริ่มต้น');
@@ -1373,22 +1373,6 @@ export default function CampusBitesApp() {
     if (historyFilter === 'DONE') return ord.status === 'COMPLETED';
     return true;
   });
-
-  const currentDate = new Date().toISOString().split('T')[0];
-  const currentMonth = currentDate.substring(0, 7);
-
-  // 🟢 คำนวณรายได้รายวันและรายเดือนให้สอดคล้องกัน (รายเดือนรวมยอดจากออเดอร์สำเร็จ)
-  const globalDailyRevenue = ordersQueue
-    .filter(o => o.status === 'COMPLETED' && o.createdAt === currentDate)
-    .reduce((sum, o) => sum + o.totalAmount, 0);
-
-  const globalMonthlyRevenue = ordersQueue
-    .filter(o => o.status === 'COMPLETED' && o.createdAt.startsWith(currentMonth))
-    .reduce((sum, o) => sum + o.totalAmount, 0);
-
-  const globalTotalOrdersCount = ordersQueue.length;
-  const globalActiveShopsCount = shops.filter(s => s.isOpen).length;
-  const globalTotalUsersCount = registeredUsers.length;
 
   const filteredShops = shops.filter(shop => {
     if (selectedCategoryFilter === 'ALL') return true;
@@ -1884,6 +1868,7 @@ export default function CampusBitesApp() {
     const myShop = shops.find(s => s.id === currentUser.merchantShopId);
     const myOrders = myShop ? ordersQueue.filter(o => o.shopId === myShop.id) : [];
 
+    // 🟢 คำนวณรายได้รายวันและรายเดือนให้สัมพันธ์กัน
     const myDailyRevenue = myOrders
       .filter(o => o.status === 'COMPLETED' && o.createdAt === currentDate)
       .reduce((sum, o) => sum + o.totalAmount, 0);
@@ -2805,7 +2790,7 @@ export default function CampusBitesApp() {
                             <span className="font-bold">{addon.name}</span>
                           </div>
                           <span className="font-black text-red-600">
-                            {addon.price === 0 ? 'ฟรี' : `+฿${addon.price}`}
+                            {addon.price === 0 ? 'ฟรี' : `+฿{addon.price}`}
                           </span>
                         </div>
                       );
