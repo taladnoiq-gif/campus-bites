@@ -521,6 +521,13 @@ export default function CampusBitesApp() {
   const [newAddonName, setNewAddonName] = useState('');
   const [newAddonPrice, setNewAddonPrice] = useState('');
 
+  // 🟢 State สำหรับแก้ไขเมนูอาหาร
+  const [editingMenu, setEditingMenu] = useState<MenuItem | null>(null);
+  const [editMenuName, setEditMenuName] = useState('');
+  const [editMenuDesc, setEditMenuDesc] = useState('');
+  const [editMenuPrice, setEditMenuPrice] = useState('');
+  const [editMenuImage, setEditMenuImage] = useState('');
+
   const lastAlertedOrderId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -554,8 +561,8 @@ export default function CampusBitesApp() {
             role: (String(row[3] || 'STUDENT')) as UserRole,
             phone: String(row[4] || ''),
             merchantShopId: row[5] && row[5] !== '-' ? String(row[5]) : undefined,
-            avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80',
-            bio: 'สมาชิกตลาดน้อยคิว'
+            avatarUrl: String(row[6] || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80'),
+            bio: String(row[7] || 'สมาชิกตลาดน้อยคิว')
           })).filter(u => u.username.length > 0);
 
           const mergedUsers = [DEFAULT_ADMIN, ...formattedUsers.filter(u => u.username !== 'admin')];
@@ -829,7 +836,7 @@ export default function CampusBitesApp() {
       localStorage.setItem('talatnoi_current_user', JSON.stringify(newUser));
       initProfileEditState(newUser);
 
-      await sendToGoogleSheet('Users', [newUser.id, newUser.name, newUser.username, newUser.role, '-', newUser.merchantShopId || '-']);
+      await sendToGoogleSheet('Users', [newUser.id, newUser.name, newUser.username, newUser.role, newUser.phone || '-', newUser.merchantShopId || '-', newUser.avatarUrl || '', newUser.bio || '']);
       setIsGlobalLoading(false);
       changeTab(authRole === 'MERCHANT' ? 'MERCHANT_SETUP' : authRole === 'ADMIN' ? 'ADMIN_DASHBOARD' : 'HOME');
     } else {
@@ -867,8 +874,11 @@ export default function CampusBitesApp() {
     setEditProfileAvatar(user.avatarUrl || '');
   };
 
-  const handleSaveProfile = () => {
+  // 🟢 บันทึกโปรไฟล์ที่แก้ไข พร้อมอัปเดตรูปลง Google Sheets
+  const handleSaveProfile = async () => {
     if (!currentUser) return;
+    setIsGlobalLoading(true);
+
     const updatedUser: UserProfile = {
       ...currentUser,
       name: editProfileName,
@@ -876,10 +886,24 @@ export default function CampusBitesApp() {
       bio: editProfileBio,
       avatarUrl: editProfileAvatar || currentUser.avatarUrl
     };
+
     setCurrentUser(updatedUser);
     localStorage.setItem('talatnoi_current_user', JSON.stringify(updatedUser));
     const updatedUsers = registeredUsers.map(u => u.id === updatedUser.id ? updatedUser : u);
     saveUsersToStorage(updatedUsers);
+
+    await sendToGoogleSheet('Users', [
+      updatedUser.id, 
+      updatedUser.name, 
+      updatedUser.username, 
+      updatedUser.role, 
+      updatedUser.phone || '-', 
+      updatedUser.merchantShopId || '-', 
+      updatedUser.avatarUrl || '', 
+      updatedUser.bio || ''
+    ]);
+
+    setIsGlobalLoading(false);
     setIsEditingProfile(false);
     alert('อัปเดตโปรไฟล์เรียบร้อยแล้ว!');
   };
@@ -1126,7 +1150,7 @@ export default function CampusBitesApp() {
     if (current) {
       await sendToGoogleSheet('Shops', [current.id, current.name, current.category, current.rating, current.reviewCount, current.bannerImage, current.isOpen, current.canteenZone, JSON.stringify(current.menus)]);
     }
-    alert('บันทึกข้อมูลร้านค้าและเปิดหน้าร้านในระบบสำเร็จ!');
+    
     changeTab('MERCHANT_KDS');
   };
 
@@ -1137,12 +1161,63 @@ export default function CampusBitesApp() {
     alert('แอดมินอัปเดตข้อมูลร้านค้าเรียบร้อยแล้ว!');
   };
 
+  // 🟢 ลบเมนูอาหารของร้านค้า
   const handleAdminDeleteMenu = (shopId: string, menuId: string) => {
     if (confirm('คุณต้องการลบเมนูนี้ออกจากร้านค้าหรือไม่?')) {
-      const updatedShops = shops.map(s => s.id === shopId ? { ...s, menus: s.menus.filter(m => m.id !== menuId) } : s);
+      const updatedShops = shops.map(s => {
+        if (s.id === shopId) {
+          return { ...s, menus: s.menus.filter(m => m.id !== menuId) };
+        }
+        return s;
+      });
       saveShopsToStorage(updatedShops);
+      const currentShop = updatedShops.find(s => s.id === shopId);
+      if (currentShop) {
+        sendToGoogleSheet('Shops', [currentShop.id, currentShop.name, currentShop.category, currentShop.rating, currentShop.reviewCount, currentShop.bannerImage, currentShop.isOpen, currentShop.canteenZone, JSON.stringify(currentShop.menus)]);
+      }
       alert('ลบเมนูเรียบร้อยแล้ว');
     }
+  };
+
+  // 🟢 เปิด Modal แก้ไขเมนูอาหาร
+  const openEditMenuModal = (menu: MenuItem) => {
+    setEditingMenu(menu);
+    setEditMenuName(menu.name);
+    setEditMenuDesc(menu.description);
+    setEditMenuPrice(menu.price.toString());
+    setEditMenuImage(menu.imageUrl);
+  };
+
+  // 🟢 บันทึกการแก้ไขเมนูอาหาร
+  const handleSaveEditedMenu = async (shopId: string) => {
+    if (!editingMenu || !editMenuName.trim() || !editMenuPrice) return;
+    const priceNum = parseFloat(editMenuPrice);
+    if (isNaN(priceNum)) return;
+
+    const updatedShops = shops.map(s => {
+      if (s.id === shopId) {
+        return {
+          ...s,
+          menus: s.menus.map(m => m.id === editingMenu.id ? {
+            ...m,
+            name: editMenuName.trim(),
+            description: editMenuDesc.trim(),
+            price: priceNum,
+            imageUrl: editMenuImage || m.imageUrl
+          } : m)
+        };
+      }
+      return s;
+    });
+
+    saveShopsToStorage(updatedShops);
+    const currentShop = updatedShops.find(s => s.id === shopId);
+    if (currentShop) {
+      await sendToGoogleSheet('Shops', [currentShop.id, currentShop.name, currentShop.category, currentShop.rating, currentShop.reviewCount, currentShop.bannerImage, currentShop.isOpen, currentShop.canteenZone, JSON.stringify(currentShop.menus)]);
+    }
+
+    setEditingMenu(null);
+    alert('อัปเดตเมนูอาหารเรียบร้อยแล้ว!');
   };
 
   const handleAddNewMenu = async (shopId: string) => {
@@ -1775,35 +1850,81 @@ export default function CampusBitesApp() {
                 </button>
               )}
               <LanguageSelector />
-              <button onClick={handleLogout} className="text-xs text-red-600 bg-red-50 border border-red-300 px-2.5 py-1 rounded-xl font-bold flex items-center gap-1"><LogOut className="w-3 h-3" /></button>
+              <button onClick={handleLogout} className="text-xs text-red-600 bg-red-50 border border-red-300 px-2.5 py-1 rounded-xl font-bold flex items-center gap-1 cursor-pointer"><LogOut className="w-3 h-3" /></button>
             </div>
           </header>
 
           <div className="p-4 space-y-4">
             <div className="flex bg-red-100 p-1.5 rounded-2xl text-[11px] font-black border border-red-300 shadow-inner">
-              <button onClick={() => changeTab('MERCHANT_KDS' as any)} className={`flex-1 py-2 rounded-xl transition-all ${activeTab === 'MERCHANT_KDS' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}>📦 KDS ({myOrders.length})</button>
-              <button onClick={() => changeTab('MERCHANT_REVENUE' as any)} className={`flex-1 py-2 rounded-xl transition-all ${activeTab === 'MERCHANT_REVENUE' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}>💰 สรุปยอด</button>
-              <button onClick={() => changeTab('MERCHANT_SETUP' as any)} className={`flex-1 py-2 rounded-xl transition-all ${activeTab === 'MERCHANT_SETUP' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}>⚙️ {t.manageShopMenu}</button>
-              <button onClick={() => changeTab('PROFILE')} className={`flex-1 py-2 rounded-xl transition-all ${activeTab === 'PROFILE' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}>👤 {t.profile}</button>
+              <button onClick={() => changeTab('MERCHANT_KDS' as any)} className={`flex-1 py-2 rounded-xl transition-all cursor-pointer ${activeTab === 'MERCHANT_KDS' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}>📦 KDS ({myOrders.length})</button>
+              <button onClick={() => changeTab('MERCHANT_REVENUE' as any)} className={`flex-1 py-2 rounded-xl transition-all cursor-pointer ${activeTab === 'MERCHANT_REVENUE' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}>💰 สรุปยอด</button>
+              <button onClick={() => changeTab('MERCHANT_SETUP' as any)} className={`flex-1 py-2 rounded-xl transition-all cursor-pointer ${activeTab === 'MERCHANT_SETUP' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}>⚙️ {t.manageShopMenu}</button>
+              <button onClick={() => changeTab('PROFILE')} className={`flex-1 py-2 rounded-xl transition-all cursor-pointer ${activeTab === 'PROFILE' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}>👤 {t.profile}</button>
             </div>
 
             {!myShop ? (
-              <div className="text-center py-20 space-y-3 bg-white border border-red-200 rounded-3xl p-6 shadow-sm">
-                <AlertCircle className="w-12 h-12 text-red-500 mx-auto" />
-                <p className="text-xs text-red-800 font-bold">บัญชีของคุณยังไม่มีการตั้งค่าร้านค้า กรุณากรอกข้อมูลร้านด้านล่างเพื่อเปิดใช้งานร้านในระบบ</p>
-                <div className="space-y-2 pt-2 text-left text-xs">
-                  <input type="text" value={editShopName} onChange={e => setEditShopName(e.target.value)} placeholder="ชื่อร้านค้าของคุณ" className="w-full bg-white border border-red-300 rounded-xl px-3 py-2 text-xs" />
-                  <input type="text" value={editShopZone} onChange={e => setEditShopZone(e.target.value)} placeholder="โซนโรงอาหาร เช่น โซน A" className="w-full bg-white border border-red-300 rounded-xl px-3 py-2 text-xs" />
-                  {/* 🟢 แก้ไขปุ่มให้กดเปลี่ยนแท็บไปหน้าตั้งค่าร้านค้าได้ทันที */}
-                  <button onClick={() => {
-                    const newShopId = currentUser.merchantShopId || `shop-${Date.now()}`;
-                    const updatedUser = { ...currentUser, merchantShopId: newShopId };
-                    setCurrentUser(updatedUser);
-                    localStorage.setItem('talatnoi_current_user', JSON.stringify(updatedUser));
-                    saveUsersToStorage(registeredUsers.map(u => u.id === currentUser.id ? updatedUser : u));
-                    changeTab('MERCHANT_SETUP');
-                  }} className="w-full bg-red-600 text-white py-2.5 rounded-xl font-bold shadow cursor-pointer">
-                    ไปที่หน้าตั้งค่าข้อมูลร้านค้า
+              <div className="bg-white border border-red-200 rounded-3xl p-6 shadow-sm space-y-4">
+                <div className="text-center space-y-2">
+                  <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto">
+                    <AlertCircle className="w-6 h-6" />
+                  </div>
+                  <h3 className="font-black text-sm text-red-950">ยังไม่มีการตั้งค่าร้านค้า</h3>
+                  <p className="text-xs text-red-700">กรุณากรอกข้อมูลร้านด้านล่างเพื่อเปิดใช้งานร้านในระบบ</p>
+                </div>
+
+                <div className="space-y-3 text-xs pt-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-red-700 mb-1">{t.shopNameLabel}</label>
+                    <input 
+                      type="text" 
+                      value={editShopName} 
+                      onChange={e => setEditShopName(e.target.value)} 
+                      placeholder="เช่น ร้านกะเพราแซ่บเวอร์" 
+                      className="w-full bg-white border border-red-300 text-red-950 rounded-xl px-3.5 py-2.5 text-xs outline-none focus:border-red-600 shadow-inner font-bold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-red-700 mb-1">{t.zoneLabel}</label>
+                    <input 
+                      type="text" 
+                      value={editShopZone} 
+                      onChange={e => setEditShopZone(e.target.value)} 
+                      placeholder="เช่น โดมแรก, โซน A" 
+                      className="w-full bg-white border border-red-300 text-red-950 rounded-xl px-3.5 py-2.5 text-xs outline-none focus:border-red-600 shadow-inner" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-red-700 mb-1 flex items-center gap-1">
+                      <ImageIcon className="w-3.5 h-3.5 text-red-600" /> {t.bannerImageLabel}
+                    </label>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={(e) => handleImageUpload(e, setEditShopBanner)} 
+                      className="w-full text-xs text-red-700 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-red-600 file:text-white hover:file:bg-red-700 cursor-pointer" 
+                    />
+                    {editShopBanner && (
+                      <div className="mt-2 w-24 h-24 rounded-2xl overflow-hidden border border-red-200 shadow-sm">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={editShopBanner} alt="Shop Preview" className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                  </div>
+
+                  <button 
+                    onClick={() => {
+                      const newShopId = currentUser.merchantShopId || `shop-${Date.now()}`;
+                      const updatedUser = { ...currentUser, merchantShopId: newShopId };
+                      setCurrentUser(updatedUser);
+                      localStorage.setItem('talatnoi_current_user', JSON.stringify(updatedUser));
+                      saveUsersToStorage(registeredUsers.map(u => u.id === currentUser.id ? updatedUser : u));
+                      handleUpdateShopInfo(newShopId);
+                    }} 
+                    className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-2xl font-black text-xs shadow-md transition-colors cursor-pointer mt-2"
+                  >
+                    บันทึกข้อมูลและเปิดร้านค้า ➔
                   </button>
                 </div>
               </div>
@@ -1812,13 +1933,13 @@ export default function CampusBitesApp() {
                 <div className="flex bg-red-100 p-1 rounded-2xl border border-red-300 text-xs font-black shadow-inner">
                   <button 
                     onClick={() => setMerchantRevenueView('DAILY')} 
-                    className={`flex-1 py-2 rounded-xl transition-all ${merchantRevenueView === 'DAILY' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}
+                    className={`flex-1 py-2 rounded-xl transition-all cursor-pointer ${merchantRevenueView === 'DAILY' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}
                   >
                     📅 {t.dailyTab}
                   </button>
                   <button 
                     onClick={() => setMerchantRevenueView('MONTHLY')} 
-                    className={`flex-1 py-2 rounded-xl transition-all ${merchantRevenueView === 'MONTHLY' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}
+                    className={`flex-1 py-2 rounded-xl transition-all cursor-pointer ${merchantRevenueView === 'MONTHLY' ? 'bg-red-600 text-white shadow-md' : 'text-red-700'}`}
                   >
                     🗓️ {t.monthlyTab}
                   </button>
@@ -1987,6 +2108,7 @@ export default function CampusBitesApp() {
                   </div>
                 </div>
 
+                {/* 🟢 รายการเมนู พร้อมปุ่มแก้ไข (Edit) และปุ่มลบ (Delete) */}
                 <div className="space-y-2.5">
                   <h4 className="font-extrabold text-xs text-red-700 uppercase tracking-wider">{t.menuList} ({myShop.menus.length})</h4>
                   {myShop.menus.map(m => (
@@ -2010,15 +2132,24 @@ export default function CampusBitesApp() {
                           </button>
                         </div>
                       </div>
-                      {m.addons && m.addons.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 pt-2 border-t border-red-100">
-                          {m.addons.map(a => (
-                            <span key={a.id} className="text-[10px] bg-red-50 text-red-800 px-2 py-0.5 rounded-lg border border-red-200">
+
+                      <div className="flex justify-between items-center pt-2 border-t border-red-100">
+                        <div className="flex flex-wrap gap-1">
+                          {m.addons && m.addons.map(a => (
+                            <span key={a.id} className="text-[9px] bg-red-50 text-red-800 px-2 py-0.5 rounded-lg border border-red-200">
                               {a.name} ({a.price === 0 ? 'ฟรี' : `+฿${a.price}`})
                             </span>
                           ))}
                         </div>
-                      )}
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => openEditMenuModal(m)} className="bg-red-50 text-red-600 px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1 cursor-pointer hover:bg-red-100">
+                            <Edit3 className="w-3 h-3" /> แก้ไข
+                          </button>
+                          <button onClick={() => handleAdminDeleteMenu(myShop.id, m.id)} className="bg-red-600 text-white p-1.5 rounded-xl cursor-pointer hover:bg-red-700 shadow">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -2502,6 +2633,42 @@ export default function CampusBitesApp() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* 🟢 Modal สำหรับแก้ไขเมนูอาหาร */}
+        {editingMenu && (
+          <div className="fixed inset-0 z-[999] bg-red-950/80 backdrop-blur-md flex justify-center items-center p-4 animate-in fade-in">
+            <div className="w-full max-w-sm bg-white border-2 border-red-600 rounded-3xl p-5 space-y-4 text-red-950 shadow-2xl">
+              <div className="flex justify-between items-center">
+                <h3 className="font-black text-sm text-red-600">แก้ไขเมนูอาหาร</h3>
+                <button onClick={() => setEditingMenu(null)} className="p-1 hover:text-red-700 cursor-pointer"><X className="w-5 h-5 text-red-600" /></button>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-[11px] font-bold text-red-700 mb-1">ชื่อเมนู:</label>
+                  <input type="text" value={editMenuName} onChange={e => setEditMenuName(e.target.value)} className="w-full bg-white border border-red-300 rounded-xl px-3 py-2 text-xs outline-none focus:border-red-600" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-red-700 mb-1">รายละเอียด:</label>
+                  <input type="text" value={editMenuDesc} onChange={e => setEditMenuDesc(e.target.value)} className="w-full bg-white border border-red-300 rounded-xl px-3 py-2 text-xs outline-none focus:border-red-600" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-red-700 mb-1">ราคา (บาท):</label>
+                  <input type="number" value={editMenuPrice} onChange={e => setEditMenuPrice(e.target.value)} className="w-full bg-white border border-red-300 rounded-xl px-3 py-2 text-xs outline-none focus:border-red-600" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-red-700 mb-1">รูปภาพเมนู:</label>
+                  <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setEditMenuImage)} className="w-full text-xs text-red-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-red-600 file:text-white cursor-pointer" />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setEditingMenu(null)} className="flex-1 bg-red-100 text-red-700 py-2.5 rounded-xl font-bold cursor-pointer">ยกเลิก</button>
+                <button onClick={() => handleSaveEditedMenu(currentUser?.merchantShopId || '')} className="flex-1 bg-red-600 text-white py-2.5 rounded-xl font-black shadow cursor-pointer hover:bg-red-700">บันทึกการแก้ไข</button>
+              </div>
             </div>
           </div>
         )}
