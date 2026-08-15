@@ -459,6 +459,7 @@ export default function CampusBitesApp() {
   const [lang, setLang] = useState<'th' | 'zh' | 'en'>('th');
   const t = translations[lang];
 
+  const [isClient, setIsClient] = useState(false);
   const [isGlobalLoading, setIsGlobalLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
 
@@ -534,17 +535,20 @@ export default function CampusBitesApp() {
   const lastAlertedOrderId = useRef<string | null>(null);
 
   useEffect(() => {
+    setIsClient(true);
     try {
-      const savedUser = localStorage.getItem('talatnoi_current_user');
-      const savedTab = localStorage.getItem('talatnoi_active_tab');
-      if (savedUser) {
-        const userObj: UserProfile = JSON.parse(savedUser);
-        if (!userObj.merchantShopId) {
-          userObj.merchantShopId = `shop-${userObj.username}`;
+      if (typeof window !== 'undefined') {
+        const savedUser = localStorage.getItem('talatnoi_current_user');
+        const savedTab = localStorage.getItem('talatnoi_active_tab');
+        if (savedUser) {
+          const userObj: UserProfile = JSON.parse(savedUser);
+          if (!userObj.merchantShopId) {
+            userObj.merchantShopId = `shop-${userObj.username}`;
+          }
+          setCurrentUser(userObj);
+          initProfileEditState(userObj);
+          if (savedTab) setActiveTab(savedTab as any);
         }
-        setCurrentUser(userObj);
-        initProfileEditState(userObj);
-        if (savedTab) setActiveTab(savedTab as any);
       }
     } catch (e) {}
   }, []);
@@ -573,7 +577,9 @@ export default function CampusBitesApp() {
 
           const mergedUsers = [DEFAULT_ADMIN, ...formattedUsers.filter(u => u.username !== 'admin')];
           setRegisteredUsers(mergedUsers);
-          localStorage.setItem('talatnoi_q_users', JSON.stringify(mergedUsers));
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('talatnoi_q_users', JSON.stringify(mergedUsers));
+          }
         }
 
         if (cloudData.shops && Array.isArray(cloudData.shops)) {
@@ -644,20 +650,26 @@ export default function CampusBitesApp() {
 
   const changeTab = (tab: typeof activeTab) => {
     setActiveTab(tab);
-    localStorage.setItem('talatnoi_active_tab', tab);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('talatnoi_active_tab', tab);
+    }
   };
 
   const saveShopsToStorage = (updatedShops: Shop[]) => {
     setShops(updatedShops);
     try {
-      localStorage.setItem('talatnoi_q_shops', JSON.stringify(updatedShops));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('talatnoi_q_shops', JSON.stringify(updatedShops));
+      }
     } catch (e) {}
   };
 
   const saveUsersToStorage = (updatedUsers: UserProfile[]) => {
     setRegisteredUsers(updatedUsers);
     try {
-      localStorage.setItem('talatnoi_q_users', JSON.stringify(updatedUsers));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('talatnoi_q_users', JSON.stringify(updatedUsers));
+      }
     } catch (e) {}
   };
 
@@ -686,7 +698,9 @@ export default function CampusBitesApp() {
       if (currentUser && currentUser.merchantShopId === shopId) {
         const updatedCurrent = { ...currentUser, merchantShopId: undefined };
         setCurrentUser(updatedCurrent);
-        localStorage.setItem('talatnoi_current_user', JSON.stringify(updatedCurrent));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('talatnoi_current_user', JSON.stringify(updatedCurrent));
+        }
       }
 
       try {
@@ -831,7 +845,9 @@ export default function CampusBitesApp() {
       const updatedUsers = [...registeredUsers, newUser];
       saveUsersToStorage(updatedUsers);
       setCurrentUser(newUser);
-      localStorage.setItem('talatnoi_current_user', JSON.stringify(newUser));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('talatnoi_current_user', JSON.stringify(newUser));
+      }
       initProfileEditState(newUser);
 
       await sendToGoogleSheet('Users', [newUser.id, newUser.name, newUser.username, newUser.role, newUser.phone || '-', newUser.merchantShopId || '-', newUser.avatarUrl || '', newUser.bio || '']);
@@ -845,7 +861,9 @@ export default function CampusBitesApp() {
           found.merchantShopId = `shop-${found.username}`;
         }
         setCurrentUser(found);
-        localStorage.setItem('talatnoi_current_user', JSON.stringify(found));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('talatnoi_current_user', JSON.stringify(found));
+        }
         initProfileEditState(found);
         if (found.role === 'MERCHANT') {
           const myShop = shops.find(s => s.id === found.merchantShopId);
@@ -889,7 +907,9 @@ export default function CampusBitesApp() {
     };
 
     setCurrentUser(updatedUser);
-    localStorage.setItem('talatnoi_current_user', JSON.stringify(updatedUser));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('talatnoi_current_user', JSON.stringify(updatedUser));
+    }
     const updatedUsers = registeredUsers.map(u => u.id === updatedUser.id ? updatedUser : u);
     saveUsersToStorage(updatedUsers);
 
@@ -911,8 +931,10 @@ export default function CampusBitesApp() {
 
   const handleLogout = () => {
     setCurrentUser(null);
-    localStorage.removeItem('talatnoi_current_user');
-    localStorage.removeItem('talatnoi_active_tab');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('talatnoi_current_user');
+      localStorage.removeItem('talatnoi_active_tab');
+    }
     setCart([]);
     setActiveOrder(null);
     setActiveTab('HOME');
@@ -1360,6 +1382,21 @@ export default function CampusBitesApp() {
     return true;
   });
 
+  const currentDate = new Date().toISOString().split('T')[0];
+  const currentMonth = currentDate.substring(0, 7);
+
+  const globalDailyRevenue = ordersQueue
+    .filter(o => o.status === 'COMPLETED' && o.createdAt === currentDate)
+    .reduce((sum, o) => sum + o.totalAmount, 0);
+
+  const globalMonthlyRevenue = ordersQueue
+    .filter(o => o.status === 'COMPLETED' && o.createdAt.startsWith(currentMonth))
+    .reduce((sum, o) => sum + o.totalAmount, 0);
+
+  const globalTotalOrdersCount = ordersQueue.length;
+  const globalActiveShopsCount = shops.filter(s => s.isOpen).length;
+  const globalTotalUsersCount = registeredUsers.length;
+
   const filteredShops = shops.filter(shop => {
     if (selectedCategoryFilter === 'ALL') return true;
     return shop.category === selectedCategoryFilter;
@@ -1473,6 +1510,10 @@ export default function CampusBitesApp() {
       </div>
     );
   };
+
+  if (!isClient) {
+    return null;
+  }
 
   if (!currentUser) {
     return (
